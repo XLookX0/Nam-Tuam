@@ -74,3 +74,19 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+html {
+  scroll-behavior: smooth;
+}
+section[id] {
+  scroll-margin-top: 72px;
+}
+
+@keyframes drift {
+  to {
+    transform: translateX(-140px);
+  }
+}
+.wave {
+  animation: drift 7s linear infinite;
+}

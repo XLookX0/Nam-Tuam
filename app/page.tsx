@@ -4,27 +4,75 @@ import { useEffect, useState, useMemo } from 'react';
 import MapWrapper from '@/components/MapWrapper';
 import TideChart from '@/components/TideChart';
 import { Station } from '@/components/Map';
-import { Droplets, Search, Waves, RefreshCw, ChevronUp, ChevronDown, Navigation } from 'lucide-react';
+import { Droplets, Search, Waves, RefreshCw } from 'lucide-react';
 
 type Filter = 'all' | 'critical' | 'warning' | 'normal';
+type Sort = 'capacity' | 'level' | 'name';
 
 const STATUS = {
   critical: { label: 'วิกฤต', bar: 'bg-[#ff5d5d]', text: 'text-[#ff8a8a]', chip: 'bg-[#ff5d5d]/15 text-[#ff8a8a]' },
   warning: { label: 'เฝ้าระวัง', bar: 'bg-[#f5b544]', text: 'text-[#f7c970]', chip: 'bg-[#f5b544]/15 text-[#f7c970]' },
   normal: { label: 'ปกติ', bar: 'bg-[#3ecf8e]', text: 'text-[#6fe0ac]', chip: 'bg-[#3ecf8e]/15 text-[#6fe0ac]' },
 } as const;
+type Key = keyof typeof STATUS;
+const statusOf = (s: string): Key => (s === 'critical' || s === 'warning' ? s : 'normal');
 
-const statusOf = (s: string) => (s === 'critical' || s === 'warning' ? s : 'normal') as keyof typeof STATUS;
+const NAV = [
+  ['ภาพรวม', '#overview'],
+  ['แผนที่', '#map'],
+  ['น้ำขึ้นน้ำลง', '#tide'],
+  ['ทุกสถานี', '#stations'],
+];
+
+const panel = 'rounded-3xl bg-[#0d212a] ring-1 ring-white/10';
+
+function Gauge({ pct, k }: { pct: number; k: Key }) {
+  return (
+    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+      <div className={`h-full rounded-full ${STATUS[k].bar} transition-[width] duration-700`} style={{ width: `${Math.min(pct, 100)}%` }} />
+    </div>
+  );
+}
+
+/* Canal cross-section: water rises toward the bank top (100%) */
+function CanalGauge({ pct, k }: { pct: number; k: Key }) {
+  const h = (Math.min(pct, 100) / 100) * 200;
+  const y = 230 - h;
+  const color = k === 'critical' ? '#ff5d5d' : k === 'warning' ? '#f5b544' : '#4fd1c5';
+  return (
+    <svg viewBox="0 0 400 260" className="w-full h-auto" role="img" aria-label={`ระดับน้ำเฉลี่ย ${pct.toFixed(0)}% ของตลิ่ง`}>
+      <defs>
+        <clipPath id="canal"><rect x="70" y="30" width="260" height="200" /></clipPath>
+        <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity="0.85" />
+          <stop offset="1" stopColor={color} stopOpacity="0.25" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="30" width="70" height="230" fill="#14323d" />
+      <rect x="330" y="30" width="70" height="230" fill="#14323d" />
+      <rect x="70" y="230" width="260" height="30" fill="#10282f" />
+      <g clipPath="url(#canal)">
+        <g style={{ transform: `translateY(${y}px)`, transition: 'transform 1s ease' }}>
+          <g className="wave">
+            <path d="M-140 6 Q-105 -6 -70 6 T0 6 T70 6 T140 6 T210 6 T280 6 T350 6 T420 6 T490 6 V300 H-140 Z" fill="url(#water)" />
+          </g>
+        </g>
+      </g>
+      <line x1="70" y1="30" x2="330" y2="30" stroke="#9fb8bf" strokeDasharray="5 5" strokeOpacity="0.6" />
+      <text x="338" y="26" fill="#9fb8bf" fontSize="11">ขอบตลิ่ง</text>
+    </svg>
+  );
+}
 
 export default function Dashboard() {
   const [stations, setStations] = useState<Station[]>([]);
   const [tides, setTides] = useState<any>(null);
-  const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [lastUpdated, setLastUpdated] = useState('');
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [sort, setSort] = useState<Sort>('capacity');
 
   const fetchData = async () => {
     setLoading(true);
@@ -53,181 +101,189 @@ export default function Dashboard() {
     return c;
   }, [stations]);
 
-  const filteredStations = useMemo(() => {
+  const avg = stations.length ? stations.reduce((a, s) => a + (Number(s.capacityPercent) || 0), 0) / stations.length : 0;
+  const top = stations.reduce<Station | null>((m, s) => (!m || Number(s.capacityPercent) > Number(m.capacityPercent) ? s : m), null);
+  const overall: Key = counts.critical ? 'critical' : counts.warning ? 'warning' : 'normal';
+  const headline = { critical: 'วิกฤตบางจุด', warning: 'ต้องเฝ้าระวัง', normal: 'ปกติ' }[overall];
+
+  const list = useMemo(() => {
     return stations
       .filter((st) => st.name.toLowerCase().includes(searchQuery.toLowerCase()))
       .filter((st) => filter === 'all' || statusOf(st.status) === filter)
-      .sort((a, b) => Number(b.capacityPercent) - Number(a.capacityPercent));
-  }, [stations, searchQuery, filter]);
+      .sort((a, b) =>
+        sort === 'name' ? a.name.localeCompare(b.name, 'th')
+        : sort === 'level' ? Number(b.waterLevel) - Number(a.waterLevel)
+        : Number(b.capacityPercent) - Number(a.capacityPercent)
+      );
+  }, [stations, searchQuery, filter, sort]);
 
   const time = lastUpdated ? new Date(lastUpdated).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '...';
 
-  const header = (
-    <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="grid place-items-center size-10 rounded-xl bg-[#4fd1c5]/15 text-[#4fd1c5] shrink-0">
-          <Droplets className="size-5" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="font-semibold text-base leading-tight text-[#e8f1ef] truncate">ระดับน้ำสมุทรสงคราม</h1>
-          <p className="text-xs text-[#7f9ca4] mt-0.5 flex items-center gap-1.5">
-            <span className="size-1.5 rounded-full bg-[#3ecf8e] animate-pulse" />
-            อัปเดตล่าสุด {time} น.
-          </p>
-        </div>
-      </div>
-      <button
-        onClick={fetchData}
-        aria-label="รีเฟรชข้อมูล"
-        className="grid place-items-center size-9 rounded-full bg-white/5 hover:bg-white/10 active:scale-95 transition"
-      >
-        <RefreshCw className={`size-4 text-[#9fb8bf] ${loading ? 'animate-spin text-[#4fd1c5]' : ''}`} />
-      </button>
-    </div>
-  );
+  const pick = (st: Station) => {
+    setSelectedStation(st);
+    document.getElementById('map')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-  const chips: { key: Filter; label: string; n: number }[] = [
-    { key: 'all', label: 'ทั้งหมด', n: stations.length },
-    { key: 'critical', label: 'วิกฤต', n: counts.critical },
-    { key: 'warning', label: 'เฝ้าระวัง', n: counts.warning },
-    { key: 'normal', label: 'ปกติ', n: counts.normal },
+  const chips: [Filter, string, number][] = [
+    ['all', 'ทั้งหมด', stations.length],
+    ['critical', 'วิกฤต', counts.critical],
+    ['warning', 'เฝ้าระวัง', counts.warning],
+    ['normal', 'ปกติ', counts.normal],
   ];
 
   return (
-    <main className="relative w-full h-[100dvh] overflow-hidden bg-[#0a1a20] text-[#e8f1ef]">
-      {/* Map */}
-      <div className="absolute inset-0 z-0">
-        <MapWrapper stations={filteredStations} selectedStation={selectedStation} />
-      </div>
-
-      {/* Mobile header */}
-      <header className="md:hidden absolute top-3 left-3 right-3 z-10 bg-[#0c1f26]/90 backdrop-blur-xl p-3 rounded-2xl ring-1 ring-white/10 shadow-xl">
-        {header}
-      </header>
-
-      {/* Panel: desktop sidebar / mobile bottom sheet */}
-      <aside
-        className={`absolute z-20 flex flex-col bg-[#0c1f26]/90 backdrop-blur-2xl ring-1 ring-white/10 shadow-2xl transition-[height] duration-500 ease-in-out
-          md:top-4 md:bottom-4 md:left-4 md:w-[400px] md:h-auto md:rounded-3xl
-          left-0 right-0 bottom-0 w-full rounded-t-3xl
-          ${isSheetOpen ? 'h-[85dvh]' : 'h-[76px]'}`}
-      >
-        {/* Mobile peek bar */}
-        <button
-          className="md:hidden w-full h-[76px] flex items-center justify-between px-5 shrink-0"
-          onClick={() => setIsSheetOpen(!isSheetOpen)}
-          aria-expanded={isSheetOpen}
-        >
-          <div className="flex items-center gap-4 text-sm">
-            <span className="flex items-center gap-2"><i className="size-2.5 rounded-full bg-[#ff5d5d] animate-pulse" />วิกฤต {counts.critical}</span>
-            <span className="flex items-center gap-2"><i className="size-2.5 rounded-full bg-[#f5b544]" />เฝ้าระวัง {counts.warning}</span>
-            <span className="flex items-center gap-2"><i className="size-2.5 rounded-full bg-[#3ecf8e]" />ปกติ {counts.normal}</span>
+    <main className="min-h-screen bg-[#071219] text-[#e8f1ef]">
+      {/* Sticky nav */}
+      <nav className="sticky top-0 z-50 bg-[#071219]/85 backdrop-blur-xl border-b border-white/10">
+        <div className="mx-auto max-w-6xl flex items-center gap-4 px-4 h-14">
+          <a href="#top" className="flex items-center gap-2 font-semibold shrink-0">
+            <span className="grid place-items-center size-8 rounded-lg bg-[#4fd1c5]/15 text-[#4fd1c5]"><Droplets className="size-4" /></span>
+            <span className="hidden sm:inline">สมุทรสงคราม Flood</span>
+          </a>
+          <div className="flex gap-1 overflow-x-auto custom-scrollbar flex-1">
+            {NAV.map(([l, h]) => (
+              <a key={h} href={h} className="px-3 py-1.5 rounded-full text-sm text-[#9fb8bf] hover:bg-white/10 hover:text-white whitespace-nowrap transition">{l}</a>
+            ))}
           </div>
-          {isSheetOpen ? <ChevronDown className="size-5 text-[#7f9ca4]" /> : <ChevronUp className="size-5 text-[#7f9ca4]" />}
-        </button>
+          <button onClick={fetchData} aria-label="รีเฟรชข้อมูล" className="grid place-items-center size-9 rounded-full bg-white/5 hover:bg-white/10 shrink-0">
+            <RefreshCw className={`size-4 ${loading ? 'animate-spin text-[#4fd1c5]' : 'text-[#9fb8bf]'}`} />
+          </button>
+        </div>
+      </nav>
 
-        <div className={`flex-1 flex flex-col min-h-0 transition-opacity duration-300 ${!isSheetOpen ? 'max-md:opacity-0 max-md:pointer-events-none' : ''}`}>
-          <div className="hidden md:block p-5 pb-4 shrink-0">{header}</div>
-
-          {/* Summary bar: share of stations by status */}
-          <div className="px-5 pb-4 shrink-0">
-            <div className="flex h-2 rounded-full overflow-hidden bg-white/5 gap-0.5">
-              {(['critical', 'warning', 'normal'] as const).map(
-                (k) => counts[k] > 0 && <div key={k} className={STATUS[k].bar} style={{ flex: counts[k] }} />
-              )}
-            </div>
-            <div className="flex gap-2 mt-3 overflow-x-auto custom-scrollbar pb-1">
-              {chips.map((c) => (
-                <button
-                  key={c.key}
-                  onClick={() => setFilter(c.key)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                    filter === c.key ? 'bg-[#4fd1c5] text-[#06242a]' : 'bg-white/5 text-[#9fb8bf] hover:bg-white/10'
-                  }`}
-                >
-                  {c.label} <span className="tabular-nums opacity-70">{c.n}</span>
-                </button>
-              ))}
+      <div id="top" className="mx-auto max-w-6xl px-4 pb-16">
+        {/* Hero */}
+        <section className="grid md:grid-cols-[1.1fr_0.9fr] gap-8 items-center pt-10 md:pt-16 pb-10">
+          <div>
+            <p className="text-sm text-[#7f9ca4] flex items-center gap-2">
+              <span className="size-2 rounded-full bg-[#3ecf8e] animate-pulse" />
+              อัปเดตล่าสุด {time} น. · {stations.length} สถานีวัดน้ำ
+            </p>
+            <h1 className="mt-4 text-4xl md:text-6xl font-bold leading-[1.15]">
+              สมุทรสงคราม
+              <br />
+              ตอนนี้น้ำ{' '}
+              <span className={STATUS[overall].text}>{loading && !stations.length ? '...' : headline}</span>
+            </h1>
+            <p className="mt-4 text-[#9fb8bf] max-w-md leading-relaxed">
+              ดูว่าน้ำสูงใกล้ตลิ่งแค่ไหนในแต่ละสถานี และสถานีไหนต้องระวัง ข้อมูลรีเฟรชทุก 1 นาที
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <a href="#map" className="px-5 py-2.5 rounded-full bg-[#4fd1c5] text-[#06242a] font-medium text-sm hover:brightness-110 transition">เปิดแผนที่</a>
+              <a href="#stations" className="px-5 py-2.5 rounded-full bg-white/10 font-medium text-sm hover:bg-white/15 transition">ค้นหาสถานีใกล้บ้าน</a>
             </div>
           </div>
+          <div className={`${panel} p-5`}>
+            <CanalGauge pct={avg} k={overall} />
+            <p className="mt-3 text-sm text-[#9fb8bf]">
+              ระดับน้ำเฉลี่ยทุกสถานี <span className="text-white font-semibold tabular-nums">{avg.toFixed(0)}%</span> ของความสูงตลิ่ง
+            </p>
+          </div>
+        </section>
 
-          {/* Search */}
-          <div className="px-5 pb-3 shrink-0">
-            <div className="relative">
+        {/* Overview */}
+        <section id="overview" className="py-8">
+          <h2 className="text-2xl font-semibold">ภาพรวมสถานีทั้งหมด</h2>
+          <div className={`${panel} mt-5 grid grid-cols-3 divide-x divide-white/10`}>
+            {(['critical', 'warning', 'normal'] as Key[]).map((k) => (
+              <button key={k} onClick={() => { setFilter(k); document.getElementById('stations')?.scrollIntoView({ behavior: 'smooth' }); }} className="p-5 md:p-7 text-left hover:bg-white/[0.03] transition first:rounded-l-3xl last:rounded-r-3xl">
+                <div className={`text-4xl md:text-5xl font-bold tabular-nums ${STATUS[k].text}`}>{counts[k]}</div>
+                <div className="mt-2 text-sm text-[#9fb8bf]">สถานี{STATUS[k].label}</div>
+              </button>
+            ))}
+          </div>
+          {top && (
+            <button onClick={() => pick(top)} className={`${panel} mt-3 w-full p-5 flex items-center justify-between gap-4 text-left hover:bg-[#10282f] transition`}>
+              <div className="min-w-0">
+                <div className="text-xs text-[#7f9ca4]">น้ำใกล้ตลิ่งที่สุด</div>
+                <div className="font-medium truncate mt-1">{top.name}</div>
+              </div>
+              <div className={`text-3xl font-bold tabular-nums ${STATUS[statusOf(top.status)].text}`}>{top.capacityPercent}%</div>
+            </button>
+          )}
+        </section>
+
+        {/* Map */}
+        <section id="map" className="py-8">
+          <h2 className="text-2xl font-semibold">แผนที่สถานีวัดน้ำ</h2>
+          <p className="text-sm text-[#7f9ca4] mt-1">แตะสถานีในตารางด้านล่างเพื่อเลื่อนแผนที่มาที่จุดนั้น</p>
+          <div className="isolate relative mt-5 h-[60vh] min-h-[360px] rounded-3xl overflow-hidden ring-1 ring-white/10">
+            <MapWrapper stations={list} selectedStation={selectedStation} />
+          </div>
+        </section>
+
+        {/* Tide */}
+        <section id="tide" className="py-8">
+          <h2 className="text-2xl font-semibold flex items-center gap-2"><Waves className="size-5 text-[#4fd1c5]" /> น้ำทะเลหนุน</h2>
+          <div className={`${panel} mt-5 p-5`}><TideChart tides={tides} /></div>
+        </section>
+
+        {/* All stations */}
+        <section id="stations" className="py-8">
+          <h2 className="text-2xl font-semibold">ทุกสถานี</h2>
+          <div className="mt-5 flex flex-col md:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-[#7f9ca4]" />
-              <input
-                type="text"
-                placeholder="ค้นหาสถานี"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 rounded-xl py-2.5 pl-10 pr-4 text-sm placeholder:text-[#7f9ca4] outline-none ring-1 ring-transparent focus:ring-[#4fd1c5]/60 transition"
-              />
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ค้นหาสถานีหรือชื่อคลอง"
+                className="w-full bg-[#0d212a] rounded-xl py-3 pl-10 pr-4 text-sm placeholder:text-[#7f9ca4] outline-none ring-1 ring-white/10 focus:ring-[#4fd1c5]/60" />
             </div>
+            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="เรียงตาม"
+              className="bg-[#0d212a] rounded-xl px-4 py-3 text-sm ring-1 ring-white/10 outline-none">
+              <option value="capacity">เรียงตามความใกล้ตลิ่ง</option>
+              <option value="level">เรียงตามระดับน้ำสูงสุด</option>
+              <option value="name">เรียงตามชื่อ ก-ฮ</option>
+            </select>
+          </div>
+          <div className="flex gap-2 mt-3 overflow-x-auto custom-scrollbar pb-1">
+            {chips.map(([key, label, n]) => (
+              <button key={key} onClick={() => setFilter(key)}
+                className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm transition ${filter === key ? 'bg-[#4fd1c5] text-[#06242a] font-medium' : 'bg-white/5 text-[#9fb8bf] hover:bg-white/10'}`}>
+                {label} <span className="tabular-nums opacity-70">{n}</span>
+              </button>
+            ))}
           </div>
 
-          {/* Station list */}
-          <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2 custom-scrollbar">
-            {loading && stations.length === 0 ? (
-              Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-[76px] rounded-2xl bg-white/5 animate-pulse" />)
-            ) : filteredStations.length === 0 ? (
-              <p className="text-center text-[#7f9ca4] text-sm mt-8">ไม่พบสถานีที่ตรงกับการค้นหา</p>
+          <div className={`${panel} mt-4 overflow-hidden`}>
+            <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_2fr_auto] gap-4 px-5 py-3 text-xs text-[#7f9ca4] border-b border-white/10">
+              <span>สถานี</span><span>ระดับน้ำ</span><span>ตลิ่ง</span><span>ความใกล้ตลิ่ง</span><span className="w-20 text-right">สถานะ</span>
+            </div>
+            {loading && !stations.length ? (
+              Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-16 m-3 rounded-xl bg-white/5 animate-pulse" />)
+            ) : list.length === 0 ? (
+              <p className="text-center text-[#7f9ca4] text-sm py-10">ไม่พบสถานีที่ตรงกับการค้นหา ลองล้างตัวกรองด้านบน</p>
             ) : (
-              filteredStations.map((st) => {
+              list.map((st) => {
                 const k = statusOf(st.status);
                 const pct = Number(st.capacityPercent) || 0;
-                const selected = selectedStation?.id === st.id;
                 return (
-                  <button
-                    key={st.id}
-                    onClick={() => {
-                      setSelectedStation(st);
-                      if (window.innerWidth < 768) setIsSheetOpen(false);
-                    }}
-                    className={`w-full text-left p-3.5 rounded-2xl transition ${
-                      selected ? 'bg-[#4fd1c5]/10 ring-1 ring-[#4fd1c5]/50' : 'bg-white/[0.04] hover:bg-white/[0.08]'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="font-medium text-sm truncate">{st.name}</h3>
-                        <p className="text-xs text-[#7f9ca4] mt-1 tabular-nums">
-                          น้ำ <span className="text-[#e8f1ef] font-medium">{st.waterLevel} ม.</span>
-                          <span className="mx-1.5 opacity-40">จาก</span>ตลิ่ง {st.bankHeight} ม.
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className={`text-lg font-semibold leading-none tabular-nums ${STATUS[k].text}`}>{st.capacityPercent}%</div>
-                        <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium ${STATUS[k].chip}`}>{STATUS[k].label}</span>
-                      </div>
+                  <button key={st.id} onClick={() => pick(st)}
+                    className="w-full text-left grid grid-cols-[1fr_auto] md:grid-cols-[2fr_1fr_1fr_2fr_auto] items-center gap-x-4 gap-y-2 px-5 py-4 border-b border-white/5 last:border-0 hover:bg-white/[0.04] transition">
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{st.name}</div>
+                      <div className="md:hidden text-xs text-[#7f9ca4] mt-1 tabular-nums">น้ำ {st.waterLevel} ม. · ตลิ่ง {st.bankHeight} ม.</div>
                     </div>
-                    {/* Bank-fill gauge: full bar = water at the top of the bank */}
-                    <div className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div className={`h-full rounded-full ${STATUS[k].bar} transition-[width] duration-700`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                    <div className="hidden md:block text-sm tabular-nums">{st.waterLevel} ม.</div>
+                    <div className="hidden md:block text-sm tabular-nums text-[#9fb8bf]">{st.bankHeight} ม.</div>
+                    <div className="hidden md:flex items-center gap-3">
+                      <div className="flex-1"><Gauge pct={pct} k={k} /></div>
+                      <span className={`w-10 text-right text-sm font-semibold tabular-nums ${STATUS[k].text}`}>{st.capacityPercent}%</span>
                     </div>
+                    <div className="flex md:w-20 flex-col items-end gap-1.5">
+                      <span className={`md:hidden text-base font-semibold tabular-nums ${STATUS[k].text}`}>{st.capacityPercent}%</span>
+                      <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${STATUS[k].chip}`}>{STATUS[k].label}</span>
+                    </div>
+                    <div className="md:hidden col-span-2"><Gauge pct={pct} k={k} /></div>
                   </button>
                 );
               })
             )}
           </div>
+        </section>
 
-          {/* Tide */}
-          <div className="p-5 border-t border-white/10 shrink-0 md:rounded-b-3xl">
-            <h2 className="text-xs font-medium text-[#9fb8bf] flex items-center gap-1.5 mb-2">
-              <Waves className="size-3.5 text-[#4fd1c5]" /> ระดับน้ำทะเลหนุน
-            </h2>
-            <TideChart tides={tides} />
-          </div>
-        </div>
-      </aside>
-
-      {/* Re-center button (mobile) */}
-      <button
-        aria-label="เลื่อนแผนที่ไปยังสถานีที่เลือก"
-        className={`md:hidden absolute right-3 z-10 bg-[#0c1f26]/90 backdrop-blur-xl ring-1 ring-white/10 p-3 rounded-full shadow-xl transition-all duration-500 ${isSheetOpen ? 'bottom-[calc(85dvh+12px)]' : 'bottom-[88px]'}`}
-        onClick={() => selectedStation && setSelectedStation({ ...selectedStation })}
-      >
-        <Navigation className="size-5 text-[#4fd1c5]" />
-      </button>
+        <footer className="pt-8 border-t border-white/10 text-xs text-[#7f9ca4] leading-relaxed">
+          ข้อมูลระดับน้ำนำมาจัดแสดงใหม่ให้ดูง่ายขึ้น ไม่ใช่ประกาศทางการ ค่าที่วัดได้เป็นของจุดติดตั้งเท่านั้น พื้นที่ใกล้เคียงอาจสูงหรือต่ำกว่านี้
+        </footer>
+      </div>
     </main>
   );
 }
