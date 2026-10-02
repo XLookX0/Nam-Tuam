@@ -1,5 +1,6 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
 import { useEffect, useState } from 'react';
 import MapWrapper from '@/components/MapWrapper';
 import TideChart from '@/components/TideChart';
