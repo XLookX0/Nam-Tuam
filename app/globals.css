@@ -90,3 +90,20 @@ section[id] {
 .wave {
   animation: drift 7s linear infinite;
 }
+/* ---- upgrade additions ---- */
+.leaflet-popup-close-button { color: #9fb8bf !important; }
+.leaflet-popup-content { margin: 12px 14px !important; min-width: 210px; }
+.leaflet-control-attribution {
+  background: rgba(7, 18, 25, 0.7) !important;
+  color: #7f9ca4 !important;
+}
+.leaflet-control-attribution a { color: #9fb8bf !important; }
+.leaflet-control-zoom a {
+  background: #0c1f26 !important;
+  color: #e8f1ef !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+@keyframes now-line {
+  50% { opacity: 0.35; }
+}
+.tide-now { animation: now-line 2s ease-in-out infinite; }
