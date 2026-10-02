@@ -31,7 +31,7 @@ export default function TideChart({ tides }: { tides: TideData | null }) {
           <Tooltip
             contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', borderRadius: '8px' }}
             labelStyle={{ color: '#a1a1aa' }}
-            formatter={(val: number) => [`${val} ม.`, 'ระดับน้ำทะเล']}
+            formatter={(val: any) => [`${val} ม.`, 'ระดับน้ำทะเล']}
           />
           <Area type="monotone" dataKey="level" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#tideGradient)" />
         </AreaChart>
