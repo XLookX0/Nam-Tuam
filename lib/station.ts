@@ -13,6 +13,8 @@ export interface Station {
   change6h?: number;
   /** Optional. Highest level today, in metres. */
   maxToday?: number;
+  /** Set only while replaying history: the timestamp (ms) being shown. */
+  asOf?: number;
 }
 
 export type ColorBy = 'level' | 'trend';
@@ -25,8 +27,9 @@ export interface MapLayers {
 
 export const STALE_MS = 3 * 60 * 60 * 1000;
 
+/** While replaying history, `asOf` is the replayed moment, so staleness is judged against it instead of "now". */
 export const isStale = (s: Station) =>
-  !s.updatedAt || Date.now() - new Date(s.updatedAt).getTime() > STALE_MS;
+  !s.updatedAt || (s.asOf ?? Date.now()) - new Date(s.updatedAt).getTime() > STALE_MS;
 
 export const COLORS = {
   critical: '#ff5d5d',

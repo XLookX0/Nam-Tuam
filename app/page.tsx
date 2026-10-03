@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapWrapper from '@/components/MapWrapper';
 import TideChart from '@/components/TideChart';
 import { funIconSvg } from '@/lib/funIcons';
+import { Snapshot, applySnapshot, sixHourChange } from '@/lib/history';
 import { Station, ColorBy, CameraMode, MapLayers, isStale, haversineKm, fmtTime, fmtChange } from '@/lib/station';
-import { Droplets, Search, Waves, Sailboat, PanelLeftClose, PanelLeftOpen, Building, Building2, Compass, Route, Map as MapIcon, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
+import { History, Play, Pause, Droplets, Search, Waves, Sailboat, PanelLeftClose, PanelLeftOpen, Building, Building2, Compass, Route, Map as MapIcon, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
 
 type Filter = 'all' | 'rising' | 'falling' | 'warning' | 'critical' | 'stale';
 type Sort = 'capacity' | 'change' | 'level' | 'name' | 'updated';
@@ -95,7 +96,7 @@ function CanalGauge({ pct, k }: { pct: number; k: Key }) {
 }
 
 export default function Dashboard() {
-  const [stations, setStations] = useState<Station[]>([]);
+  const [rawStations, setStations] = useState<Station[]>([]);
   const [tides, setTides] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState('');
   const [loading, setLoading] = useState(true);
@@ -118,6 +119,61 @@ export default function Dashboard() {
   const pendingId = useRef<string | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
   const gesture = useRef({ y0: 0, y: 0, t: 0, v: 0 });
+
+  // ---- 24h history / replay ----
+  const [history, setHistory] = useState<Snapshot[]>([]);
+  const [replay, setReplay] = useState<number | null>(null); // index into history; null = live
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch('/api/history');
+        const j = await r.json();
+        if (alive && Array.isArray(j.snapshots)) setHistory(j.snapshots);
+      } catch {
+        /* history is optional */
+      }
+    };
+    load();
+    const id = setInterval(load, 5 * 60 * 1000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  // Everything below (map, list, counts) reads `stations`, so replaying history needs no other changes.
+  const stations = useMemo(() => {
+    const n = history.length;
+    if (replay != null && history[replay]) {
+      const snap = history[replay];
+      return rawStations.map((s) => {
+        const a = applySnapshot(s, snap);
+        a.change6h = sixHourChange(history, replay, String(s.id), a.waterLevel);
+        return a;
+      });
+    }
+    if (!n) return rawStations;
+    return rawStations.map((s) =>
+      s.change6h != null ? s : { ...s, change6h: sixHourChange(history, n - 1, String(s.id), Number(s.waterLevel)) }
+    );
+  }, [rawStations, history, replay]);
+  const replaySnap = replay != null ? history[replay] ?? null : null;
+
+  // Autoplay: step through the day, then drop back to live
+  useEffect(() => {
+    if (!playing) return;
+    const t = setTimeout(() => {
+      if (replay == null) setReplay(0);
+      else if (replay >= history.length - 1) {
+        setPlaying(false);
+        setReplay(null);
+      } else setReplay(replay + 1);
+    }, 700);
+    return () => clearTimeout(t);
+  }, [playing, replay, history.length]);
 
   const say = useCallback((msg: string) => {
     setToast(msg);
@@ -202,8 +258,8 @@ export default function Dashboard() {
       });
   }, [stations, searchQuery, filter, sort]);
 
-  const time = lastUpdated ? fmtTime(lastUpdated) : '...';
-  const feedAgeMin = lastUpdated ? (Date.now() - new Date(lastUpdated).getTime()) / 60000 : 0;
+  const time = replaySnap ? fmtTime(new Date(replaySnap.t).toISOString()) : lastUpdated ? fmtTime(lastUpdated) : '...';
+  const feedAgeMin = replaySnap ? 0 : lastUpdated ? (Date.now() - new Date(lastUpdated).getTime()) / 60000 : 0;
 
   const expand = () => setSheet((s) => (s === 'peek' ? 'half' : s));
 
@@ -334,11 +390,11 @@ export default function Dashboard() {
             <span className="font-semibold text-sm truncate">สมุทรสงคราม</span>
           </div>
           <span className="hidden md:flex items-center gap-2 pr-2 text-xs text-zinc-300">
-            <span className={`size-2 rounded-full ${feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
-            อัปเดต {time} น.
+            <span className={`size-2 rounded-full ${replaySnap ? 'bg-cyan-400' : feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+            {replaySnap ? 'ย้อนดู' : 'อัปเดต'} {time} น.
           </span>
           <span className="md:hidden flex items-center gap-1.5 text-xs text-zinc-300 pr-1">
-            <span className={`size-1.5 rounded-full ${feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+            <span className={`size-1.5 rounded-full ${replaySnap ? 'bg-cyan-400' : feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
             {time} น.
           </span>
           <button onClick={locate} aria-label="ตำแหน่งของฉัน" className={iconBtn}><LocateFixed className="size-4" /></button>
@@ -382,6 +438,51 @@ export default function Dashboard() {
           className={`${glass} hidden md:grid absolute z-30 left-4 top-4 place-items-center size-12 rounded-2xl text-zinc-200 hover:bg-white/10 transition`}>
           <PanelLeftOpen className="size-5" />
         </button>
+      )}
+
+      {/* 24-hour history slider */}
+      {history.length < 2 ? (
+        <div className="replay-bar">
+          <div className={`${glass} pointer-events-auto rounded-2xl px-4 py-2.5 text-xs text-zinc-300 flex items-center gap-2`}>
+            <History className="size-4 text-zinc-400" />
+            ย้อนหลัง 24 ชม. กำลังเก็บข้อมูล ({history.length}/2 ครั้ง)
+          </div>
+        </div>
+      ) : (
+        <div className={`replay-bar ${sheet === 'peek' ? '' : 'max-md:hidden'}`}>
+          <div className={`${glass} pointer-events-auto flex items-center gap-3 rounded-2xl pl-3 pr-2 py-2 w-full max-w-2xl`}>
+            <button onClick={() => { setPlaying(false); setReplay(null); }} disabled={replay == null}
+              aria-label="กลับไปปัจจุบัน" title="กลับไปปัจจุบัน"
+              className={`${iconBtn} ${replay == null ? 'opacity-60' : 'bg-cyan-400/15 text-cyan-300'}`}>
+              <History className="size-[18px]" />
+            </button>
+            <div className="min-w-0 shrink-0 w-[92px] leading-tight">
+              <div className="text-[11px] text-zinc-400">ย้อนหลัง 24 ชม.</div>
+              <div className={`text-sm font-medium truncate ${replaySnap ? 'text-cyan-300' : 'text-zinc-100'}`}>
+                {replaySnap ? `${(Math.round(((Date.now() - replaySnap.t) / 3.6e6) * 10) / 10).toFixed(1)} ชม. ก่อน` : 'ปัจจุบัน'}
+              </div>
+            </div>
+            <input type="range" className="replay-range flex-1 min-w-0" aria-label="เลื่อนดูระดับน้ำย้อนหลัง"
+              min={0} max={history.length - 1} step={1}
+              value={replay ?? history.length - 1}
+              style={{ '--p': `${((replay ?? history.length - 1) / (history.length - 1)) * 100}%` } as React.CSSProperties}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setPlaying(false);
+                setReplay(v >= history.length - 1 ? null : v);
+              }} />
+            <button
+              onClick={() => {
+                if (playing) return setPlaying(false);
+                if (replay == null || replay >= history.length - 1) setReplay(0);
+                setPlaying(true);
+              }}
+              aria-label={playing ? 'หยุดเล่น' : 'เล่นย้อนหลัง'} title={playing ? 'หยุดเล่น' : 'เล่นย้อนหลัง'}
+              className="grid place-items-center size-10 rounded-full bg-cyan-400 text-zinc-950 hover:brightness-110 transition shrink-0">
+              {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 3D controls: camera presets and basemap layers */}
@@ -461,7 +562,7 @@ export default function Dashboard() {
             </button>
           </div>
           <h1 className="text-xl md:text-2xl font-semibold leading-snug">
-            ตอนนี้น้ำ <span className={STATUS[overall].text}>{loading && !stations.length ? '...' : headline}</span>
+            {replaySnap ? 'ตอนนั้นน้ำ' : 'ตอนนี้น้ำ'} <span className={STATUS[overall].text}>{loading && !stations.length ? '...' : headline}</span>
           </h1>
           {feedAgeMin > 30 && (
             <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-300">
