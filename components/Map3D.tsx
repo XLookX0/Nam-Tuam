@@ -6,6 +6,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Station, ColorBy, markerColor, pillarHeight, circlePolygon, fmtTime, PILLAR_FULL_M } from '@/lib/station';
 import type { MapProps } from './Map';
 
+// Next.js/Turbopack doesn't emit MapLibre's built-in worker correctly (the browser gets an HTML 404 instead of JS).
+// Serve the worker ourselves from /public. See: public/maplibre-gl-csp-worker.js
+maplibregl.setWorkerUrl('/maplibre-gl-csp-worker.js');
+
 const CENTER: [number, number] = [100.0022, 13.4093]; // lng, lat
 const BOUNDS: [[number, number], [number, number]] = [[99.6, 13.0], [100.4, 13.8]];
 const SRC = 'flood-stations';
@@ -138,7 +142,12 @@ export default function Map3D(props: MapProps) {
       });
       mapRef.current = map;
 
-      map.on('error', (e) => console.warn('[Map3D]', e?.error?.message ?? e));
+      map.on('error', (e) => {
+        const msg = String(e?.error?.message ?? e);
+        console.warn('[Map3D]', msg);
+        // A dead worker means a permanently blank map: hand control back so the page falls back to 2D
+        if (/worker/i.test(msg)) propsRef.current.onUnsupported?.();
+      });
       map.once('style.load', () => {
         if (!map) return;
         const s = map.getStyle();
