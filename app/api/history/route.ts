@@ -1,27 +1,26 @@
 import { redis } from '@/lib/redis';
-import { buildSnapshot, HISTORY_KEY, HISTORY_MAX } from '@/lib/history';
+import { HISTORY_KEY, HISTORY_MAX, Snapshot } from '@/lib/history';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Called by the Cloudflare Worker every 15 minutes (see setup notes).
- * Reads the current stations through your existing /api/water-data route and pushes a compact snapshot into Redis.
- */
-export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return new Response('unauthorized', { status: 401 });
+export async function GET() {
+  try {
+    const raw = (await redis.lrange(HISTORY_KEY, 0, HISTORY_MAX - 1)) as unknown[];
+    const cutoff = Date.now() - 24 * 3600e3 - 20 * 60e3;
+    const snapshots = raw
+      .map((x) => {
+        if (typeof x !== 'string') return x as Snapshot;
+        try {
+          return JSON.parse(x) as Snapshot;
+        } catch {
+          return null;
+        }
+      })
+      .filter((x): x is Snapshot => !!x && typeof x.t === 'number' && x.t >= cutoff)
+      .reverse();
+    return Response.json({ snapshots }, { headers: { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300' } });
+  } catch (err) {
+    console.error('[history]', err);
+    return Response.json({ snapshots: [] });
   }
-
-  const res = await fetch(new URL('/api/water-data', req.url), { cache: 'no-store' });
-  if (!res.ok) return Response.json({ error: `water-data responded ${res.status}` }, { status: 502 });
-  const data = await res.json();
-
-  const snap = buildSnapshot(data.waterLevels ?? [], Date.now());
-  const count = Object.keys(snap.d).length;
-  if (!count) return Response.json({ skipped: 'no reporting stations' });
-
-  // Newest first; keep the latest HISTORY_MAX entries. The SDK serialises the object for us.
-  await redis.pipeline().lpush(HISTORY_KEY, snap).ltrim(HISTORY_KEY, 0, HISTORY_MAX - 1).exec();
-  return Response.json({ ok: true, stations: count });
 }
