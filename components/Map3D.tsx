@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Station, ColorBy, markerColor, pillarHeight, circlePolygon, fmtTime, PILLAR_FULL_M } from '@/lib/station';
 import type { MapProps } from './Map';
