@@ -96,7 +96,7 @@ export default function FloodMap({ stations, selectedStation, focusKey, colorBy 
       minZoom={10}
       maxBounds={BOUNDS}
       maxBoundsViscosity={0.9}
-      className="w-full h-full z-0"
+      style={{ height: '100vh', width: '100%' }}
       zoomControl={false}
     >
       <TileLayer
