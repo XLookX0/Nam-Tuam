@@ -364,3 +364,50 @@ body {
   color: var(--c);
   font-weight: 600;
 }
+
+/* ---------- Fun mode ---------- */
+.fun-icon {
+  width: 46px;
+  height: 38px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.fun-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.45));
+}
+/* animate the inner wrapper: MapLibre owns the marker element's own transform */
+.fun-bob {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 90%;
+  animation: fun-bob var(--dur, 2.3s) ease-in-out infinite;
+}
+.fun-sub .fun-bob {
+  animation-name: fun-bob-sub;
+}
+@keyframes fun-bob {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-5px) rotate(4deg); }
+}
+@keyframes fun-bob-sub {
+  0%, 100% { transform: translateY(1px) rotate(-1.5deg); }
+  50% { transform: translateY(-3px) rotate(1.5deg); }
+}
+
+/* ---------- Collapsible sidebar (tablet / desktop) ---------- */
+@media (min-width: 768px) {
+  .app[data-panel='closed'] .panel {
+    transform: translateX(calc(-100% - 32px));
+    visibility: hidden;
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 0.35s;
+  }
+  .app[data-panel='closed'] .map-layer {
+    left: 0;
+  }
+  .app[data-panel='closed'] .hud {
+    left: 72px;
+  }
+}

@@ -24,6 +24,8 @@ export interface MapProps {
   camera?: { mode: CameraMode | null; key: number } | null;
   /** 3D only: basemap layer visibility. */
   layers?: MapLayers;
+  /** 3D only: fun mode, a little vessel floats on every pillar. */
+  fun?: boolean;
   /** 3D only: the map ended a camera mode itself (e.g. the user grabbed the map during the tour). */
   onCameraEnd?: () => void;
 }

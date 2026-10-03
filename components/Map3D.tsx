@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type * as ml from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Station, ColorBy, markerColor, pillarHeight, circlePolygon, fmtTime, isStale, PILLAR_FULL_M } from '@/lib/station';
+import { funKind, funIconSvg } from '@/lib/funIcons';
 import type { MapProps } from './Map';
 
 // Next.js/Turbopack mangles MapLibre's web worker ("Worker failed to load"), so the library itself is loaded at
@@ -80,6 +81,15 @@ function labelHtml(st: Station) {
   return `<div class="flood-label-card" style="--c:${markerColor(st, 'level')}"><div class="fl-name">${esc(shortName(st.name))}</div><div class="fl-meta"><b>${st.waterLevel} ม.</b> ${rel}</div></div>`;
 }
 
+/** Pixels from a station's base to the top of its water pillar on screen. */
+function liftPx(map: ml.Map, st: Station) {
+  const z = map.getZoom();
+  const f = z <= 10 ? 1 : z >= 14 ? 0.3 : 1 - (z - 10) * 0.175;
+  const sinP = Math.sin((map.getPitch() * Math.PI) / 180);
+  const mpp = (156543.03392 * Math.cos((Number(st.lat) * Math.PI) / 180)) / Math.pow(2, z);
+  return (pillarHeight(st) * f * sinP) / mpp;
+}
+
 function webglOk() {
   try {
     const c = document.createElement('canvas');
@@ -134,7 +144,7 @@ function popupHtml(st: Station) {
 }
 
 export default function Map3D(props: MapProps) {
-  const { stations, selectedStation, focusKey, colorBy = 'level', userPos, camera, layers } = props;
+  const { stations, selectedStation, focusKey, colorBy = 'level', userPos, camera, layers, fun } = props;
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<ml.Map | null>(null);
   const popupRef = useRef<ml.Popup | null>(null);
@@ -214,19 +224,21 @@ export default function Map3D(props: MapProps) {
         };
 
         map.addSource(SRC, { type: 'geojson', data: buildData(propsRef.current.stations, propsRef.current.colorBy ?? 'level') });
-        map.addLayer({
-          id: 'bank-tubes',
-          type: 'fill-extrusion',
-          source: SRC,
-          filter: ['==', ['get', 'kind'], 'bank'],
-          paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': HEIGHT_EXPR, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.16 },
-        });
+        // Order matters: the opaque pillars must be drawn BEFORE the translucent tubes around them,
+        // otherwise the tube's depth hides the pillar inside it.
         map.addLayer({
           id: 'water-pillars',
           type: 'fill-extrusion',
           source: SRC,
           filter: ['==', ['get', 'kind'], 'water'],
-          paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': HEIGHT_EXPR, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.95 },
+          paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': HEIGHT_EXPR, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 1 },
+        });
+        map.addLayer({
+          id: 'bank-tubes',
+          type: 'fill-extrusion',
+          source: SRC,
+          filter: ['==', ['get', 'kind'], 'bank'],
+          paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': HEIGHT_EXPR, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.22 },
         });
 
         for (const layer of ['water-pillars', 'bank-tubes']) {
@@ -340,15 +352,9 @@ export default function Map3D(props: MapProps) {
       const marker = new gl.Marker({ element: el, anchor: 'bottom' }).setLngLat([Number(st.lng), Number(st.lat)]).addTo(map);
       return { st, marker };
     });
-    // Lift each card to the top of its pillar (same zoom scaling as the extrusion height expression)
+    // Lift each card to the top of its pillar (and above the fun icon when it's on)
     const place = () => {
-      const z = map.getZoom();
-      const f = z <= 10 ? 1 : z >= 14 ? 0.3 : 1 - (z - 10) * 0.175;
-      const sinP = Math.sin((map.getPitch() * Math.PI) / 180);
-      for (const { st, marker } of items) {
-        const mpp = (156543.03392 * Math.cos((Number(st.lat) * Math.PI) / 180)) / Math.pow(2, z);
-        marker.setOffset([0, -(pillarHeight(st) * f * sinP) / mpp - 8]);
-      }
+      for (const { st, marker } of items) marker.setOffset([0, -liftPx(map, st) - 8 - (fun ? 40 : 0)]);
     };
     place();
     map.on('move', place);
@@ -356,7 +362,38 @@ export default function Map3D(props: MapProps) {
       map.off('move', place);
       items.forEach((it) => it.marker.remove());
     };
-  }, [ready, stations, selId]);
+  }, [ready, stations, selId, fun]);
+
+  // Fun mode: a bobbing vessel on top of every pillar (duck = normal, boat = watch, submarine = critical)
+  useEffect(() => {
+    const map = mapRef.current;
+    const gl = glRef.current;
+    if (!ready || !map || !gl || !fun) return;
+    const items = stations
+      .filter((s) => !isStale(s))
+      .map((st) => {
+        const kind = funKind(st);
+        const el = document.createElement('div');
+        el.className = `fun-icon fun-${kind}`;
+        el.style.setProperty('--dur', st.trend === 'rising' ? '1.5s' : st.trend === 'falling' ? '3.2s' : '2.3s');
+        el.innerHTML = `<div class="fun-bob">${funIconSvg(kind)}</div>`;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          propsRef.current.onSelect?.(st);
+        });
+        const marker = new gl.Marker({ element: el, anchor: 'bottom' }).setLngLat([Number(st.lng), Number(st.lat)]).addTo(map);
+        return { st, marker };
+      });
+    const place = () => {
+      for (const { st, marker } of items) marker.setOffset([0, -liftPx(map, st) + 6]);
+    };
+    place();
+    map.on('move', place);
+    return () => {
+      map.off('move', place);
+      items.forEach((it) => it.marker.remove());
+    };
+  }, [ready, stations, fun]);
 
   // "My location" dot
   useEffect(() => {

@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapWrapper from '@/components/MapWrapper';
 import TideChart from '@/components/TideChart';
+import { funIconSvg } from '@/lib/funIcons';
 import { Station, ColorBy, CameraMode, MapLayers, isStale, haversineKm, fmtTime, fmtChange } from '@/lib/station';
-import { Droplets, Search, Waves, Building, Building2, Compass, Route, Map as MapIcon, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
+import { Droplets, Search, Waves, Sailboat, PanelLeftClose, PanelLeftOpen, Building, Building2, Compass, Route, Map as MapIcon, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
 
 type Filter = 'all' | 'rising' | 'falling' | 'warning' | 'critical' | 'stale';
 type Sort = 'capacity' | 'change' | 'level' | 'name' | 'updated';
@@ -106,6 +107,8 @@ export default function Dashboard() {
   const [sort, setSort] = useState<Sort>('capacity');
   const [colorBy, setColorBy] = useState<ColorBy>('level');
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [fun, setFun] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [cam, setCam] = useState<{ mode: CameraMode | null; key: number }>({ mode: null, key: 0 });
   const [layers, setLayers] = useState<MapLayers>({ canals: true, roads: true, buildings: true });
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
@@ -301,7 +304,7 @@ export default function Dashboard() {
   const trendTotal = counts.rising + counts.falling + counts.stable || 1;
 
   return (
-    <main className="app text-zinc-100">
+    <main className="app text-zinc-100" data-panel={panelOpen ? 'open' : 'closed'}>
       {/* Map: always in the background. Between md and lg it starts right of the sidebar so stations aren't centred underneath it. */}
       <div className="map-layer">
         <MapWrapper
@@ -313,6 +316,7 @@ export default function Dashboard() {
           userPos={userPos}
           onSelect={pick}
           camera={cam}
+          fun={fun}
           layers={layers}
           onCameraEnd={() => setCam((c) => ({ ...c, mode: null }))}
           onUnsupported={() => {
@@ -359,7 +363,7 @@ export default function Dashboard() {
                 className={`px-3 py-1.5 rounded-[10px] transition ${colorBy === v ? 'bg-cyan-400 text-zinc-950 font-medium' : 'text-zinc-300 hover:text-white'}`}>{l}</button>
             ))}
           </div>
-          <div className={`${glass} hidden sm:flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-xs text-zinc-300`}>
+          <div className={`${glass} hidden xl:flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-xs text-zinc-300`}>
             {(colorBy === 'level'
               ? [['#3ecf8e', 'ปกติ'], ['#f5b544', 'เฝ้าระวัง'], ['#ff5d5d', 'วิกฤต']]
               : [['#ff7a59', 'ขึ้น'], ['#4fd1c5', 'ลด'], ['#7f9ca4', 'ทรงตัว']]
@@ -367,10 +371,18 @@ export default function Dashboard() {
               <span key={l} className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ background: c }} />{l}</span>
             ))}
             <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full border-2 border-zinc-500" />ไม่ส่งค่า</span>
-            {viewMode === '3d' && <span className="text-zinc-300">แท่ง = น้ำ หลอดใส = ตลิ่ง</span>}
+            {viewMode === '3d' && <span className="hidden 2xl:inline text-zinc-300">แท่ง = น้ำ หลอดใส = ตลิ่ง</span>}
           </div>
         </div>
       </div>
+
+      {/* Reopen the sidebar after hiding it (tablet / desktop) */}
+      {!panelOpen && (
+        <button onClick={() => setPanelOpen(true)} aria-label="แสดงแผงด้านข้าง" title="แสดงแผง"
+          className={`${glass} hidden md:grid absolute z-30 left-4 top-4 place-items-center size-12 rounded-2xl text-zinc-200 hover:bg-white/10 transition`}>
+          <PanelLeftOpen className="size-5" />
+        </button>
+      )}
 
       {/* 3D controls: camera presets and basemap layers */}
       {viewMode === '3d' && (
@@ -401,6 +413,23 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          <div className={`${glass} pointer-events-auto p-1 rounded-2xl`}>
+            <button title="โหมดสนุก" aria-label="โหมดสนุก" aria-pressed={fun} onClick={() => setFun((f) => !f)}
+              className={`grid place-items-center size-10 rounded-xl transition ${fun ? 'bg-amber-400 text-zinc-950' : 'text-zinc-300 hover:bg-white/10'}`}>
+              <Sailboat className="size-[18px]" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {viewMode === '3d' && fun && (
+        <div className={`${glass} hidden md:flex absolute z-30 right-16 bottom-9 items-center gap-4 rounded-2xl px-4 py-2 text-xs text-zinc-200`}>
+          {([['duck', 'ปกติ'], ['boat', 'เฝ้าระวัง'], ['sub', 'วิกฤต']] as const).map(([k, label]) => (
+            <span key={k} className="inline-flex items-center gap-1.5">
+              <span className="block w-8 h-6 shrink-0" dangerouslySetInnerHTML={{ __html: funIconSvg(k) }} />
+              {label}
+            </span>
+          ))}
         </div>
       )}
 
@@ -427,6 +456,9 @@ export default function Dashboard() {
               <div className="font-semibold">สมุทรสงคราม Flood</div>
               <div className="text-xs text-zinc-300">ระดับน้ำแบบเรียลไทม์ {stations.length} สถานี</div>
             </div>
+            <button onClick={() => setPanelOpen(false)} aria-label="ซ่อนแผงด้านข้าง" title="ซ่อนแผง" className={`${iconBtn} ml-auto`}>
+              <PanelLeftClose className="size-4" />
+            </button>
           </div>
           <h1 className="text-xl md:text-2xl font-semibold leading-snug">
             ตอนนี้น้ำ <span className={STATUS[overall].text}>{loading && !stations.length ? '...' : headline}</span>
