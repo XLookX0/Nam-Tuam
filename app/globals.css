@@ -6,7 +6,7 @@
 html,
 body {
   background: #0a1a20;
-  font-family: var(--font-plex-thai), system-ui, sans-serif;
+  font-family: var(--font-prompt), system-ui, sans-serif;
 }
 
 :focus-visible {
@@ -52,18 +52,18 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #24424c;
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #35616e;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -107,3 +107,11 @@ section[id] {
   50% { opacity: 0.35; }
 }
 .tide-now { animation: now-line 2s ease-in-out infinite; }
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}

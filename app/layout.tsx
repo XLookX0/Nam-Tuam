@@ -1,11 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Sans_Thai } from "next/font/google";
+import { Prompt } from "next/font/google";
 import "./globals.css";
 
-const plexThai = IBM_Plex_Sans_Thai({
-  variable: "--font-plex-thai",
+// Route segment config can't be exported from a "use client" page,
+// so it lives here and applies to every route under this layout.
+export const dynamic = "force-dynamic";
+
+const prompt = Prompt({
+  variable: "--font-prompt",
   subsets: ["thai", "latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -15,12 +20,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0a1a20",
+  viewportFit: "cover",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="th" className={`${plexThai.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="th" className={`${prompt.variable} h-full antialiased`}>
+      <body className="h-[100dvh] overflow-hidden">{children}</body>
     </html>
   );
 }
