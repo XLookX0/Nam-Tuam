@@ -105,6 +105,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('capacity');
   const [colorBy, setColorBy] = useState<ColorBy>('level');
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [toast, setToast] = useState('');
   const [tab, setTab] = useState<Tab>('stations');
@@ -301,7 +302,19 @@ export default function Dashboard() {
     <main className="app text-zinc-100">
       {/* Map: always in the background. Between md and lg it starts right of the sidebar so stations aren't centred underneath it. */}
       <div className="map-layer">
-        <MapWrapper stations={list} selectedStation={selectedStation} focusKey={focusKey} colorBy={colorBy} userPos={userPos} />
+        <MapWrapper
+          mode={viewMode}
+          stations={list}
+          selectedStation={selectedStation}
+          focusKey={focusKey}
+          colorBy={colorBy}
+          userPos={userPos}
+          onSelect={pick}
+          onUnsupported={() => {
+            setViewMode('2d');
+            say('เปิดแผนที่ 3 มิติไม่ได้ในอุปกรณ์นี้ จึงกลับไปแบบ 2 มิติ');
+          }}
+        />
       </div>
 
       {/* Floating header */}
@@ -327,6 +340,14 @@ export default function Dashboard() {
         </header>
 
         <div className="flex items-center gap-2">
+          <div role="group" aria-label="โหมดแผนที่" className={`${glass} pointer-events-auto flex rounded-xl p-0.5 text-xs`}>
+            {(['2d', '3d'] as const).map((m) => (
+              <button key={m} onClick={() => setViewMode(m)} aria-pressed={viewMode === m}
+                className={`px-3 py-1.5 rounded-[10px] font-medium transition ${viewMode === m ? 'bg-cyan-400 text-zinc-950' : 'text-zinc-300 hover:text-white'}`}>
+                {m === '2d' ? '2 มิติ' : '3 มิติ'}
+              </button>
+            ))}
+          </div>
           <div role="group" aria-label="สีของจุด" className={`${glass} pointer-events-auto flex rounded-xl p-0.5 text-xs`}>
             {([['level', 'ตามระดับน้ำ'], ['trend', 'ตามทิศทาง']] as [ColorBy, string][]).map(([v, l]) => (
               <button key={v} onClick={() => setColorBy(v)} aria-pressed={colorBy === v}
@@ -341,6 +362,7 @@ export default function Dashboard() {
               <span key={l} className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ background: c }} />{l}</span>
             ))}
             <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full border-2 border-zinc-500" />ไม่ส่งค่า</span>
+            {viewMode === '3d' && <span className="text-zinc-300">แท่งสี = ระดับน้ำ หลอดใส = ขอบตลิ่ง</span>}
           </div>
         </div>
       </div>
@@ -560,7 +582,7 @@ export default function Dashboard() {
                 })}
 
               <p className="text-[11px] leading-relaxed text-zinc-400 pt-1">
-                ข้อมูลจากหน่วยงานของรัฐ นำมาจัดแสดงใหม่ให้ดูง่ายขึ้น ไม่ใช่ประกาศทางการ ค่าที่วัดได้เป็นของจุดติดตั้งเท่านั้น พื้นที่ใกล้เคียงอาจสูงหรือต่ำกว่านี้ แผนที่ &copy; CARTO &copy; OpenStreetMap
+                ข้อมูลจากหน่วยงานของรัฐ นำมาจัดแสดงใหม่ให้ดูง่ายขึ้น ไม่ใช่ประกาศทางการ ค่าที่วัดได้เป็นของจุดติดตั้งเท่านั้น พื้นที่ใกล้เคียงอาจสูงหรือต่ำกว่านี้ แผนที่ &copy; CARTO &copy; OpenFreeMap &copy; OpenStreetMap
               </p>
             </div>
           )}

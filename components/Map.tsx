@@ -16,6 +16,10 @@ export interface MapProps {
   focusKey?: number;
   colorBy?: ColorBy;
   userPos?: [number, number] | null;
+  /** Used by the 3D map: called when a pillar is clicked. */
+  onSelect?: (s: Station) => void;
+  /** Used by the 3D map: called when WebGL or the 3D style can't load, so the page can fall back to 2D. */
+  onUnsupported?: () => void;
 }
 
 const CENTER: [number, number] = [13.4093, 100.0022];

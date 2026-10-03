@@ -60,3 +60,24 @@ export const fmtTime = (iso?: string) =>
 
 export const fmtChange = (v?: number) =>
   v == null ? '' : `${v > 0 ? '+' : ''}${v.toFixed(2)} ม.`;
+/* ---------- 3D map helpers ---------- */
+
+/** Height of a "full" pillar (= water at bank top) in metres. Exaggerated on purpose so it reads at city zoom. */
+export const PILLAR_FULL_M = 800;
+
+/** Pillar height scales with how close the water is to the bank (capped at 110%). */
+export const pillarHeight = (s: Station) =>
+  (Math.min(Math.max(Number(s.capacityPercent) || 0, 0), 110) / 100) * PILLAR_FULL_M;
+
+/** Closed GeoJSON ring approximating a circle of `radiusM` metres around lng/lat. */
+export function circlePolygon(lng: number, lat: number, radiusM: number, steps = 20): [number, number][][] {
+  const dLat = radiusM / 111320;
+  const dLng = radiusM / (111320 * Math.cos((lat * Math.PI) / 180));
+  const ring: [number, number][] = [];
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    ring.push([lng + Math.cos(a) * dLng, lat + Math.sin(a) * dLat]);
+  }
+  ring.push(ring[0]);
+  return [ring];
+}

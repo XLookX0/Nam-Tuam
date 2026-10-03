@@ -276,3 +276,46 @@ body {
     top: calc(env(safe-area-inset-top, 0px) + 8px);
   }
 }
+
+/* ---------- MapLibre (3D) ---------- */
+.maplibregl-map {
+  font-family: inherit;
+  background: #071219;
+}
+.maplibregl-popup-content {
+  background: #0c1f26;
+  color: #e8f1ef;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 12px 14px;
+  font-family: inherit;
+}
+.maplibregl-popup-close-button {
+  color: #9fb8bf;
+  font-size: 18px;
+  padding: 2px 8px;
+}
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: #0c1f26;
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: #0c1f26;
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: #0c1f26;
+}
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: #0c1f26;
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(7, 18, 25, 0.7) !important;
+  color: #9fb8bf !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: #9fb8bf !important;
+}
