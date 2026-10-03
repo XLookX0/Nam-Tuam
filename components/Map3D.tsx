@@ -1,14 +1,31 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import * as maplibregl from 'maplibre-gl';
+import type * as ml from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Station, ColorBy, markerColor, pillarHeight, circlePolygon, fmtTime, PILLAR_FULL_M } from '@/lib/station';
 import type { MapProps } from './Map';
 
-// Next.js/Turbopack doesn't emit MapLibre's built-in worker correctly (the browser gets an HTML 404 instead of JS).
-// Serve the worker ourselves from /public. See: public/maplibre-gl-csp-worker.js
-maplibregl.setWorkerUrl('/maplibre-gl-csp-worker.js');
+// Next.js/Turbopack mangles MapLibre's web worker ("Worker failed to load"), so the library itself is loaded at
+// runtime from a CDN (its official build creates the worker internally). The npm package is only used for types and CSS.
+type MapLibre = typeof import('maplibre-gl');
+let libPromise: Promise<MapLibre> | null = null;
+function loadMapLibre(): Promise<MapLibre> {
+  const w = window as unknown as { maplibregl?: MapLibre };
+  if (w.maplibregl) return Promise.resolve(w.maplibregl);
+  libPromise ??= new Promise<MapLibre>((resolve, reject) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js';
+    sc.async = true;
+    sc.onload = () => (w.maplibregl ? resolve(w.maplibregl) : reject(new Error('maplibre-gl missing after load')));
+    sc.onerror = () => {
+      libPromise = null;
+      reject(new Error('maplibre-gl failed to download'));
+    };
+    document.head.appendChild(sc);
+  });
+  return libPromise;
+}
 
 const CENTER: [number, number] = [100.0022, 13.4093]; // lng, lat
 const BOUNDS: [[number, number], [number, number]] = [[99.6, 13.0], [100.4, 13.8]];
@@ -22,10 +39,10 @@ const HEIGHT_EXPR = [
   'interpolate', ['linear'], ['zoom'],
   10, ['get', 'h'],
   14, ['*', ['get', 'h'], 0.3],
-] as unknown as maplibregl.ExpressionSpecification;
+] as unknown as ml.ExpressionSpecification;
 
 /** OpenFreeMap's "dark" style is almost black on black. Recolour it to the dashboard's deep teal-navy so roads, water and labels read. */
-function retheme(map: maplibregl.Map, layers: maplibregl.LayerSpecification[]) {
+function retheme(map: ml.Map, layers: ml.LayerSpecification[]) {
   for (const l of layers) {
     try {
       const id = l.id;
@@ -67,7 +84,7 @@ async function loadStyle() {
   for (const name of STYLES) {
     try {
       const res = await fetch(`https://tiles.openfreemap.org/styles/${name}`);
-      if (res.ok) return (await res.json()) as maplibregl.StyleSpecification;
+      if (res.ok) return (await res.json()) as ml.StyleSpecification;
     } catch {
       /* try next */
     }
@@ -110,9 +127,10 @@ function popupHtml(st: Station) {
 export default function Map3D(props: MapProps) {
   const { stations, selectedStation, focusKey, colorBy = 'level', userPos } = props;
   const box = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const popupRef = useRef<maplibregl.Popup | null>(null);
-  const userRef = useRef<maplibregl.Marker | null>(null);
+  const mapRef = useRef<ml.Map | null>(null);
+  const popupRef = useRef<ml.Popup | null>(null);
+  const userRef = useRef<ml.Marker | null>(null);
+  const glRef = useRef<MapLibre | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
   const [ready, setReady] = useState(false);
@@ -120,15 +138,23 @@ export default function Map3D(props: MapProps) {
   // Create the map once
   useEffect(() => {
     let cancelled = false;
-    let map: maplibregl.Map | undefined;
+    let map: ml.Map | undefined;
 
     (async () => {
       if (!webglOk()) return propsRef.current.onUnsupported?.();
+      let gl: MapLibre;
+      try {
+        gl = await loadMapLibre();
+      } catch (err) {
+        console.warn('[Map3D]', err);
+        return propsRef.current.onUnsupported?.();
+      }
+      glRef.current = gl;
       const style = await loadStyle();
       if (cancelled || !box.current) return;
       if (!style) return propsRef.current.onUnsupported?.();
 
-      map = new maplibregl.Map({
+      map = new gl.Map({
         container: box.current,
         style,
         center: CENTER,
@@ -210,7 +236,7 @@ export default function Map3D(props: MapProps) {
 
   // Keep pillars in sync with data and colour mode
   useEffect(() => {
-    const src = mapRef.current?.getSource(SRC) as maplibregl.GeoJSONSource | undefined;
+    const src = mapRef.current?.getSource(SRC) as ml.GeoJSONSource | undefined;
     if (ready && src) src.setData(buildData(stations, colorBy));
   }, [ready, stations, colorBy]);
 
@@ -221,10 +247,10 @@ export default function Map3D(props: MapProps) {
     popupRef.current = null;
     const map = mapRef.current;
     const st = propsRef.current.selectedStation;
-    if (!ready || !map || !st) return;
+    if (!ready || !map || !st || !glRef.current) return;
     const lngLat: [number, number] = [Number(st.lng), Number(st.lat)];
     map.flyTo({ center: lngLat, zoom: Math.max(map.getZoom(), 13.2), pitch: 62, duration: 1400, essential: true });
-    popupRef.current = new maplibregl.Popup({ offset: 12, maxWidth: '280px', closeOnClick: false })
+    popupRef.current = new glRef.current.Popup({ offset: 12, maxWidth: '280px', closeOnClick: false })
       .setLngLat(lngLat)
       .setHTML(popupHtml(st))
       .addTo(map);
@@ -235,10 +261,10 @@ export default function Map3D(props: MapProps) {
     const map = mapRef.current;
     userRef.current?.remove();
     userRef.current = null;
-    if (!ready || !map || !userPos) return;
+    if (!ready || !map || !userPos || !glRef.current) return;
     const dot = document.createElement('div');
     dot.style.cssText = 'width:16px;height:16px;border-radius:9999px;background:#38bdf8;border:2px solid #fff;box-shadow:0 0 0 6px rgba(56,189,248,.25)';
-    userRef.current = new maplibregl.Marker({ element: dot }).setLngLat([userPos[1], userPos[0]]).addTo(map);
+    userRef.current = new glRef.current.Marker({ element: dot }).setLngLat([userPos[1], userPos[0]]).addTo(map);
   }, [ready, userPos]);
 
   return <div ref={box} role="application" aria-label="แผนที่ 3 มิติ" style={{ position: 'absolute', inset: 0 }} />;
