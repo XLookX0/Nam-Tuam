@@ -70,9 +70,9 @@ export default function TideChart({ tides }: { tides: TideData | null }) {
   const nextLow = now != null ? ext.find((x) => x.kind === 'low' && x.t > now) : undefined;
 
   const stat = (label: string, value: string, sub?: string) => (
-    <div className="rounded-2xl bg-white/[0.04] px-4 py-3">
+    <div className="rounded-2xl bg-white/[0.04] px-3 py-2.5 min-w-0">
       <div className="text-xs text-[#7f9ca4]">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-1 text-base sm:text-xl font-semibold tabular-nums">{value}</div>
       {sub && <div className="text-xs text-[#9fb8bf] tabular-nums">{sub}</div>}
     </div>
   );

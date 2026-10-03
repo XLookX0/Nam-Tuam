@@ -110,7 +110,8 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>('stations');
   const [sheet, setSheet] = useState<Snap>('peek');
   const pendingId = useRef<string | null>(null);
-  const dragStart = useRef<number | null>(null);
+  const [drag, setDrag] = useState<number | null>(null);
+  const gesture = useRef({ y0: 0, y: 0, t: 0, v: 0 });
 
   const say = useCallback((msg: string) => {
     setToast(msg);
@@ -247,19 +248,40 @@ export default function Dashboard() {
     }
   };
 
-  // Sheet handle: drag/swipe up or down to change snap, tap to cycle
+  // Sheet handle: the sheet follows the finger, then snaps to the nearest position (velocity-aware). A tap cycles.
+  const visibleFor = (snap: Snap) => {
+    const H = window.innerHeight;
+    return snap === 'peek' ? 216 : snap === 'half' ? H * 0.55 : H * 0.9;
+  };
   const onHandleDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    dragStart.current = e.clientY;
+    gesture.current = { y0: e.clientY, y: e.clientY, t: performance.now(), v: 0 };
     e.currentTarget.setPointerCapture(e.pointerId);
+    setDrag(0);
+  };
+  const onHandleMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (drag == null) return;
+    const g = gesture.current;
+    const now = performance.now();
+    g.v = (e.clientY - g.y) / Math.max(now - g.t, 1); // px per ms, + is downward
+    g.y = e.clientY;
+    g.t = now;
+    const here = visibleFor(sheet);
+    const lo = -(visibleFor('full') - here); // can't pull past fully open
+    const hi = here - visibleFor('peek'); // can't push past resting
+    setDrag(Math.min(hi, Math.max(lo, e.clientY - g.y0)));
   };
   const onHandleUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (dragStart.current == null) return;
-    const dy = e.clientY - dragStart.current;
-    dragStart.current = null;
-    const i = SNAPS.indexOf(sheet);
-    if (dy < -30) setSheet(SNAPS[Math.min(i + 1, 2)]);
-    else if (dy > 30) setSheet(SNAPS[Math.max(i - 1, 0)]);
-    else setSheet(SNAPS[(i + 1) % 3]);
+    if (drag == null) return;
+    const dy = e.clientY - gesture.current.y0;
+    const v = gesture.current.v;
+    setDrag(null);
+    if (Math.abs(dy) < 8) {
+      setSheet(SNAPS[(SNAPS.indexOf(sheet) + 1) % 3]);
+      return;
+    }
+    const projected = visibleFor(sheet) - dy - v * 180;
+    const nearest = SNAPS.reduce((a, b) => (Math.abs(visibleFor(b) - projected) < Math.abs(visibleFor(a) - projected) ? b : a));
+    setSheet(nearest);
   };
 
   const summary: ['all' | 'warning' | 'critical', string, number][] = [
@@ -327,12 +349,14 @@ export default function Dashboard() {
       <aside
         aria-label="ข้อมูลระดับน้ำ"
         data-snap={sheet}
+        data-dragging={drag != null}
+        style={{ '--drag': `${drag ?? 0}px` } as React.CSSProperties}
         className="panel glass"
       >
         {/* Handle (mobile) */}
-        <div role="button" tabIndex={0} aria-label="ขยายหรือย่อแผง" onPointerDown={onHandleDown} onPointerUp={onHandleUp}
+        <div role="button" tabIndex={0} aria-label="ขยายหรือย่อแผง" onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp}
           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSheet(SNAPS[(SNAPS.indexOf(sheet) + 1) % 3])}
-          className="md:hidden touch-none shrink-0 grid place-items-center h-6 cursor-grab">
+          className="md:hidden touch-none shrink-0 grid place-items-center h-9 cursor-grab">
           <span className="h-1 w-10 rounded-full bg-white/25" />
         </div>
 
@@ -368,15 +392,15 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <div role="tablist" className="shrink-0 px-4 md:px-5 pb-2 flex gap-1 border-b border-white/10">
+          {tabs.map(([t, l]) => (
+            <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); expand(); }}
+              className={`flex-1 py-2 rounded-xl text-sm transition ${tab === t ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:text-white'}`}>{l}</button>
+          ))}
+        </div>
+
         {/* Scrollable body */}
         <div data-snap={sheet} className="panel-body custom-scrollbar px-4 md:px-5">
-          <div role="tablist" className="sticky top-0 z-10 -mx-4 md:-mx-5 px-4 md:px-5 py-2 flex gap-1 bg-zinc-950/60 backdrop-blur-xl border-b border-white/10">
-            {tabs.map(([t, l]) => (
-              <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); expand(); }}
-                className={`flex-1 py-2 rounded-xl text-sm transition ${tab === t ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:text-zinc-200'}`}>{l}</button>
-            ))}
-          </div>
-
           {tab === 'stations' && (
             <div className="pt-3 space-y-3">
               {selectedStation && (
