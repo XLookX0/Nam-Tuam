@@ -115,3 +115,125 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
+/* ================= App shell =================
+   Plain CSS on purpose: the structural layout must not depend on
+   Tailwind utility ordering or arbitrary-value parsing. */
+.glass {
+  background: rgba(9, 9, 11, 0.7);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #0a1a20;
+}
+
+.map-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  isolation: isolate;
+}
+.map-layer .leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+
+.hud {
+  position: absolute;
+  z-index: 30;
+  left: 12px;
+  right: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* Mobile: bottom sheet, 90dvh tall, slid down by data-snap */
+.panel {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 90vh;
+  height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.5);
+  transform: translateY(var(--sheet-y, 0px));
+  transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.panel[data-snap='peek'] {
+  --sheet-y: calc(100% - 11.5rem - env(safe-area-inset-bottom, 0px));
+}
+.panel[data-snap='half'] {
+  --sheet-y: calc(100% - 55vh);
+  --sheet-y: calc(100% - 55dvh);
+}
+.panel[data-snap='full'] {
+  --sheet-y: 0px;
+}
+
+.panel-body {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Extra bottom space so the last card can scroll above the part of the sheet that sits off-screen */
+.panel-body[data-snap='peek'] {
+  padding-bottom: 80dvh;
+  pointer-events: none;
+}
+.panel-body[data-snap='half'] {
+  padding-bottom: 40dvh;
+}
+.panel-body[data-snap='full'] {
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Tablet: sidebar, map starts to its right so stations aren't centred underneath it */
+@media (min-width: 768px) {
+  .map-layer {
+    left: 416px;
+  }
+  .hud {
+    left: 432px;
+    right: 16px;
+    align-items: flex-end;
+  }
+  .panel {
+    left: 16px;
+    right: auto;
+    top: 16px;
+    bottom: 16px;
+    width: 400px;
+    height: auto;
+    transform: none;
+    border-radius: 24px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  }
+  .panel-body,
+  .panel-body[data-snap] {
+    padding-bottom: 20px;
+    pointer-events: auto;
+  }
+}
+
+/* Desktop: map runs full-screen behind the floating sidebar */
+@media (min-width: 1024px) {
+  .map-layer {
+    left: 0;
+  }
+}

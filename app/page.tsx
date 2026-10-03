@@ -28,22 +28,12 @@ const TREND = {
 const tOf = (s: Station) => TREND[s.trend] ?? TREND.stable;
 
 // Glass surfaces
-const glass = 'border border-white/10 bg-zinc-950/70 backdrop-blur-xl';
+const glass = 'glass';
 const sub = 'rounded-2xl bg-white/[0.04] ring-1 ring-white/10';
 const iconBtn = 'grid place-items-center size-9 rounded-xl text-zinc-300 hover:bg-white/10 active:bg-white/15 transition shrink-0';
 
-// Bottom-sheet geometry (mobile). Sheet is 90dvh tall and slides by translateY.
+// Sheet geometry lives in globals.css (.panel[data-snap]).
 const SNAPS: Snap[] = ['peek', 'half', 'full'];
-const SHEET_Y: Record<Snap, string> = {
-  peek: 'translate-y-[calc(100%_-_11.5rem_-_env(safe-area-inset-bottom))]',
-  half: 'translate-y-[calc(100%_-_55dvh)]',
-  full: 'translate-y-0',
-};
-const BODY_PB: Record<Snap, string> = {
-  peek: 'pb-[80dvh]',
-  half: 'pb-[40dvh]',
-  full: 'pb-[calc(1.5rem+env(safe-area-inset-bottom))]',
-};
 
 const SUMMARY: Record<'all' | 'warning' | 'critical', { text: string; on: string }> = {
   all: { text: 'text-cyan-300', on: 'bg-cyan-400/10 ring-cyan-400/50' },
@@ -286,14 +276,14 @@ export default function Dashboard() {
   const trendTotal = counts.rising + counts.falling + counts.stable || 1;
 
   return (
-    <main className="relative h-[100dvh] overflow-hidden bg-[#0a1a20] text-zinc-100">
+    <main className="app text-zinc-100">
       {/* Map: always in the background. Between md and lg it starts right of the sidebar so stations aren't centred underneath it. */}
-      <div className="isolate absolute inset-0 z-0 md:left-[416px] lg:left-0">
+      <div className="map-layer">
         <MapWrapper stations={list} selectedStation={selectedStation} focusKey={focusKey} colorBy={colorBy} userPos={userPos} />
       </div>
 
       {/* Floating header */}
-      <div className="absolute z-30 left-3 right-3 top-[calc(env(safe-area-inset-top)+0.75rem)] flex flex-col gap-2 pointer-events-none md:left-[432px] md:right-4 md:items-end">
+      <div className="hud">
         <header className={`${glass} pointer-events-auto flex items-center gap-1.5 h-12 pl-3 pr-1.5 rounded-2xl w-full md:w-auto shadow-lg shadow-black/30`}>
           <div className="flex items-center gap-2 min-w-0 flex-1 md:hidden">
             <span className="grid place-items-center size-7 rounded-lg bg-cyan-400/15 text-cyan-300"><Droplets className="size-4" /></span>
@@ -336,9 +326,8 @@ export default function Dashboard() {
       {/* Sidebar (md+) / bottom sheet (mobile) */}
       <aside
         aria-label="ข้อมูลระดับน้ำ"
-        className={`${glass} absolute z-20 inset-x-0 bottom-0 h-[90dvh] ${SHEET_Y[sheet]} flex flex-col overflow-hidden rounded-t-[28px] shadow-[0_-12px_48px_rgba(0,0,0,0.5)]
-          transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
-          md:inset-x-auto md:left-4 md:top-4 md:bottom-4 md:h-auto md:w-[400px] md:translate-y-0 md:rounded-3xl md:shadow-[0_12px_48px_rgba(0,0,0,0.5)]`}
+        data-snap={sheet}
+        className="panel glass"
       >
         {/* Handle (mobile) */}
         <div role="button" tabIndex={0} aria-label="ขยายหรือย่อแผง" onPointerDown={onHandleDown} onPointerUp={onHandleUp}
@@ -380,7 +369,7 @@ export default function Dashboard() {
         </div>
 
         {/* Scrollable body */}
-        <div className={`custom-scrollbar flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 md:px-5 ${BODY_PB[sheet]} md:pb-5 ${sheet === 'peek' ? 'pointer-events-none md:pointer-events-auto' : ''}`}>
+        <div data-snap={sheet} className="panel-body custom-scrollbar px-4 md:px-5">
           <div role="tablist" className="sticky top-0 z-10 -mx-4 md:-mx-5 px-4 md:px-5 py-2 flex gap-1 bg-zinc-950/60 backdrop-blur-xl border-b border-white/10">
             {tabs.map(([t, l]) => (
               <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); expand(); }}
@@ -563,7 +552,7 @@ export default function Dashboard() {
       </aside>
 
       {toast && (
-        <div role="status" className="absolute z-40 left-1/2 -translate-x-1/2 top-[calc(env(safe-area-inset-top)+7.5rem)] rounded-full bg-zinc-100 text-zinc-900 text-sm font-medium px-4 py-2 shadow-xl max-w-[90vw] text-center">
+        <div role="status" className="absolute z-40 left-1/2 -translate-x-1/2 top-32 rounded-full bg-zinc-100 text-zinc-900 text-sm font-medium px-4 py-2 shadow-xl max-w-[90vw] text-center">
           {toast}
         </div>
       )}
