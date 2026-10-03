@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from 're
 import L from 'leaflet';
 import { ArrowUp, ArrowDown, Minus, ExternalLink } from 'lucide-react';
 import { Station, ColorBy, isStale, markerColor, fmtTime, fmtChange } from '@/lib/station';
+import 'leaflet/dist/leaflet.css';
 
 export type { Station } from '@/lib/station';
 
