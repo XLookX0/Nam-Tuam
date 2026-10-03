@@ -15,7 +15,7 @@ const STATUS = {
   critical: { label: 'วิกฤต', bar: 'bg-red-500', text: 'text-red-400', chip: 'bg-red-500/15 text-red-300' },
   warning: { label: 'เฝ้าระวัง', bar: 'bg-amber-400', text: 'text-amber-300', chip: 'bg-amber-400/15 text-amber-200' },
   normal: { label: 'ปกติ', bar: 'bg-emerald-400', text: 'text-emerald-300', chip: 'bg-emerald-400/15 text-emerald-200' },
-  stale: { label: 'ไม่ส่งค่า', bar: 'bg-zinc-500', text: 'text-zinc-400', chip: 'bg-white/10 text-zinc-300' },
+  stale: { label: 'ไม่ส่งค่า', bar: 'bg-zinc-500', text: 'text-zinc-300', chip: 'bg-white/10 text-zinc-300' },
 } as const;
 type Key = keyof typeof STATUS;
 const kOf = (s: Station): Key => (isStale(s) ? 'stale' : s.status === 'critical' || s.status === 'warning' ? s.status : 'normal');
@@ -23,7 +23,7 @@ const kOf = (s: Station): Key => (isStale(s) ? 'stale' : s.status === 'critical'
 const TREND = {
   rising: { label: 'กำลังขึ้น', Icon: ArrowUp, text: 'text-orange-400', bg: 'bg-orange-400' },
   falling: { label: 'กำลังลด', Icon: ArrowDown, text: 'text-cyan-300', bg: 'bg-cyan-300' },
-  stable: { label: 'ทรงตัว', Icon: Minus, text: 'text-zinc-400', bg: 'bg-zinc-400' },
+  stable: { label: 'ทรงตัว', Icon: Minus, text: 'text-zinc-300', bg: 'bg-zinc-400' },
 } as const;
 const tOf = (s: Station) => TREND[s.trend] ?? TREND.stable;
 
@@ -58,7 +58,7 @@ function TrendLabel({ st, showChange = true }: { st: Station; showChange?: boole
     <span className={`inline-flex items-center gap-1 text-xs ${t.text}`}>
       <t.Icon className="size-3" />
       {t.label}
-      {showChange && st.change6h != null && <span className="text-zinc-400 tabular-nums">{fmtChange(st.change6h)}</span>}
+      {showChange && st.change6h != null && <span className="text-zinc-300 tabular-nums">{fmtChange(st.change6h)}</span>}
     </span>
   );
 }
@@ -289,11 +289,11 @@ export default function Dashboard() {
             <span className="grid place-items-center size-7 rounded-lg bg-cyan-400/15 text-cyan-300"><Droplets className="size-4" /></span>
             <span className="font-semibold text-sm truncate">สมุทรสงคราม</span>
           </div>
-          <span className="hidden md:flex items-center gap-2 pr-2 text-xs text-zinc-400">
+          <span className="hidden md:flex items-center gap-2 pr-2 text-xs text-zinc-300">
             <span className={`size-2 rounded-full ${feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
             อัปเดต {time} น.
           </span>
-          <span className="md:hidden flex items-center gap-1.5 text-xs text-zinc-400 pr-1">
+          <span className="md:hidden flex items-center gap-1.5 text-xs text-zinc-300 pr-1">
             <span className={`size-1.5 rounded-full ${feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
             {time} น.
           </span>
@@ -342,7 +342,7 @@ export default function Dashboard() {
             <span className="grid place-items-center size-9 rounded-xl bg-cyan-400/15 text-cyan-300"><Droplets className="size-5" /></span>
             <div className="leading-tight">
               <div className="font-semibold">สมุทรสงคราม Flood</div>
-              <div className="text-xs text-zinc-400">ระดับน้ำแบบเรียลไทม์ {stations.length} สถานี</div>
+              <div className="text-xs text-zinc-300">ระดับน้ำแบบเรียลไทม์ {stations.length} สถานี</div>
             </div>
           </div>
           <h1 className="text-xl md:text-2xl font-semibold leading-snug">
@@ -361,7 +361,7 @@ export default function Dashboard() {
                 <button key={k} onClick={() => goFilter(k)} aria-pressed={on}
                   className={`rounded-2xl px-3 py-2.5 text-left ring-1 transition ${glow} ${on ? SUMMARY[k].on : 'bg-white/[0.03] ring-white/10 hover:bg-white/[0.07]'}`}>
                   <div className={`text-2xl font-semibold tabular-nums leading-none ${SUMMARY[k].text}`}>{n}</div>
-                  <div className="mt-1.5 text-xs text-zinc-400">{label}</div>
+                  <div className="mt-1.5 text-xs text-zinc-300">{label}</div>
                 </button>
               );
             })}
@@ -373,7 +373,7 @@ export default function Dashboard() {
           <div role="tablist" className="sticky top-0 z-10 -mx-4 md:-mx-5 px-4 md:px-5 py-2 flex gap-1 bg-zinc-950/60 backdrop-blur-xl border-b border-white/10">
             {tabs.map(([t, l]) => (
               <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); expand(); }}
-                className={`flex-1 py-2 rounded-xl text-sm transition ${tab === t ? 'bg-white/10 text-white font-medium' : 'text-zinc-400 hover:text-zinc-200'}`}>{l}</button>
+                className={`flex-1 py-2 rounded-xl text-sm transition ${tab === t ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:text-zinc-200'}`}>{l}</button>
             ))}
           </div>
 
@@ -395,10 +395,10 @@ export default function Dashboard() {
 
               <div className="flex gap-2">
                 <div className="relative flex-1 min-w-0">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
                   <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onFocus={() => setSheet('full')}
                     placeholder="ค้นหาสถานีหรือชื่อคลอง" aria-label="ค้นหาสถานี"
-                    className="w-full rounded-xl bg-white/[0.06] py-2.5 pl-9 pr-3 text-sm placeholder:text-zinc-500 outline-none ring-1 ring-white/10 focus:ring-cyan-400/60" />
+                    className="w-full rounded-xl bg-white/[0.06] py-2.5 pl-9 pr-3 text-sm placeholder:text-zinc-400 outline-none ring-1 ring-white/10 focus:ring-cyan-400/60" />
                 </div>
                 <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="เรียงตาม"
                   className="w-28 rounded-xl bg-zinc-900/80 px-2.5 py-2.5 text-xs text-zinc-200 ring-1 ring-white/10 outline-none">
@@ -418,7 +418,7 @@ export default function Dashboard() {
                   </button>
                 ))}
                 {filter !== 'all' && (
-                  <button onClick={() => setFilter('all')} className="shrink-0 px-3 py-1 rounded-full text-xs text-zinc-400 hover:text-white">ล้างตัวกรอง</button>
+                  <button onClick={() => setFilter('all')} className="shrink-0 px-3 py-1 rounded-full text-xs text-zinc-300 hover:text-white">ล้างตัวกรอง</button>
                 )}
               </div>
 
@@ -426,7 +426,7 @@ export default function Dashboard() {
                 {loading && !stations.length ? (
                   Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-[88px] rounded-2xl bg-white/5 animate-pulse" />)
                 ) : list.length === 0 ? (
-                  <p className="text-center text-zinc-500 text-sm py-10">ไม่พบสถานีที่ตรงกับการค้นหา ลองล้างตัวกรอง</p>
+                  <p className="text-center text-zinc-400 text-sm py-10">ไม่พบสถานีที่ตรงกับการค้นหา ลองล้างตัวกรอง</p>
                 ) : (
                   list.map((st) => {
                     const k = kOf(st);
@@ -442,7 +442,7 @@ export default function Dashboard() {
                             <div className="text-sm font-medium truncate">{st.name}</div>
                             <div className="mt-1 flex items-center gap-2.5">
                               <TrendLabel st={st} />
-                              <span className="text-[11px] text-zinc-500 tabular-nums">{fmtTime(st.updatedAt)} น.</span>
+                              <span className="text-[11px] text-zinc-400 tabular-nums">{fmtTime(st.updatedAt)} น.</span>
                             </div>
                           </div>
                           <div className="text-right shrink-0">
@@ -451,7 +451,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="mt-3"><Gauge pct={pct} k={k} /></div>
-                        <div className="mt-1.5 flex justify-between text-[11px] text-zinc-500 tabular-nums">
+                        <div className="mt-1.5 flex justify-between text-[11px] text-zinc-400 tabular-nums">
                           <span>น้ำ {st.waterLevel} ม.</span>
                           <span>ตลิ่ง {st.bankHeight} ม.</span>
                         </div>
@@ -486,7 +486,7 @@ export default function Dashboard() {
                     const body = (
                       <>
                         <div className={`flex items-center gap-1 text-2xl font-semibold tabular-nums ${T.text}`}><T.Icon className="size-4" />{counts[t]}</div>
-                        <div className="text-xs text-zinc-400 mt-0.5">{T.label}</div>
+                        <div className="text-xs text-zinc-300 mt-0.5">{T.label}</div>
                       </>
                     );
                     return t === 'stable' ? <div key={t} className="p-2">{body}</div> : (
@@ -504,7 +504,7 @@ export default function Dashboard() {
               {top && (
                 <button onClick={() => pick(top)} className={`${sub} w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-white/[0.07] transition`}>
                   <div className="min-w-0">
-                    <div className="text-xs text-zinc-400">น้ำใกล้ตลิ่งที่สุด</div>
+                    <div className="text-xs text-zinc-300">น้ำใกล้ตลิ่งที่สุด</div>
                     <div className="text-sm font-medium truncate mt-1">{top.name}</div>
                   </div>
                   <div className={`text-2xl font-semibold tabular-nums ${STATUS[kOf(top)].text}`}>{top.capacityPercent}%</div>
@@ -526,7 +526,7 @@ export default function Dashboard() {
                           <li key={s.id}>
                             <button onClick={() => pick(s)} className="w-full flex items-center justify-between gap-3 py-2 text-left text-sm text-zinc-200 hover:text-white">
                               <span className="truncate">{s.name}</span>
-                              <span className="tabular-nums shrink-0 text-zinc-400">{movers.hasDelta ? fmtChange(s.change6h) : `${s.capacityPercent}%`}</span>
+                              <span className="tabular-nums shrink-0 text-zinc-300">{movers.hasDelta ? fmtChange(s.change6h) : `${s.capacityPercent}%`}</span>
                             </button>
                           </li>
                         ))}
@@ -535,7 +535,7 @@ export default function Dashboard() {
                   );
                 })}
 
-              <p className="text-[11px] leading-relaxed text-zinc-500 pt-1">
+              <p className="text-[11px] leading-relaxed text-zinc-400 pt-1">
                 ข้อมูลจากหน่วยงานของรัฐ นำมาจัดแสดงใหม่ให้ดูง่ายขึ้น ไม่ใช่ประกาศทางการ ค่าที่วัดได้เป็นของจุดติดตั้งเท่านั้น พื้นที่ใกล้เคียงอาจสูงหรือต่ำกว่านี้ แผนที่ &copy; CARTO &copy; OpenStreetMap
               </p>
             </div>
@@ -544,7 +544,7 @@ export default function Dashboard() {
           {tab === 'tide' && (
             <div className="pt-3">
               <h2 className="flex items-center gap-2 text-base font-medium"><Waves className="size-4 text-cyan-300" /> น้ำทะเลหนุน</h2>
-              <p className="text-xs text-zinc-400 mt-1 mb-3">คาดการณ์น้ำขึ้นน้ำลงของวันนี้ ช่วงน้ำขึ้นสูงมีผลต่อระดับน้ำในคลอง</p>
+              <p className="text-xs text-zinc-300 mt-1 mb-3">คาดการณ์น้ำขึ้นน้ำลงของวันนี้ ช่วงน้ำขึ้นสูงมีผลต่อระดับน้ำในคลอง</p>
               <div className={`${sub} p-4`}><TideChart tides={tides} /></div>
             </div>
           )}

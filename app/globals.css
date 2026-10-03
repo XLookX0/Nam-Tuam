@@ -1,12 +1,18 @@
+@import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 html,
 body {
-  background: #0a1a20;
+  background: #071219;
+  color: #e8f1ef;
   font-family: var(--font-prompt), system-ui, sans-serif;
+}
+button {
+  cursor: pointer;
+}
+select option {
+  background: #0d212a;
+  color: #e8f1ef;
 }
 
 :focus-visible {
@@ -119,9 +125,9 @@ body {
    Plain CSS on purpose: the structural layout must not depend on
    Tailwind utility ordering or arbitrary-value parsing. */
 .glass {
-  background: rgba(9, 9, 11, 0.7);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
+  background: rgba(7, 18, 25, 0.8);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -131,7 +137,7 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: #0a1a20;
+  background: #071219;
 }
 
 .map-layer {
@@ -236,4 +242,9 @@ body {
   .map-layer {
     left: 0;
   }
+}
+
+/* Lift the very dark basemap so roads and labels are readable (markers and popups are unaffected) */
+.map-layer .leaflet-tile-pane {
+  filter: brightness(1.6) contrast(0.9) saturate(1.15);
 }
