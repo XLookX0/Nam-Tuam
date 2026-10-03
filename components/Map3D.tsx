@@ -7,11 +7,48 @@ import { Station, ColorBy, markerColor, pillarHeight, circlePolygon, fmtTime, PI
 import type { MapProps } from './Map';
 
 const CENTER: [number, number] = [100.0022, 13.4093]; // lng, lat
-const BOUNDS: [[number, number], [number, number]] = [[99.7, 13.15], [100.3, 13.7]];
+const BOUNDS: [[number, number], [number, number]] = [[99.6, 13.0], [100.4, 13.8]];
 const SRC = 'flood-stations';
 const STYLES = ['dark', 'liberty']; // OpenFreeMap style names, tried in order
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+
+/** Pillars shrink as you zoom in so they don't swallow the city. */
+const HEIGHT_EXPR = [
+  'interpolate', ['linear'], ['zoom'],
+  10, ['get', 'h'],
+  14, ['*', ['get', 'h'], 0.3],
+] as unknown as maplibregl.ExpressionSpecification;
+
+/** OpenFreeMap's "dark" style is almost black on black. Recolour it to the dashboard's deep teal-navy so roads, water and labels read. */
+function retheme(map: maplibregl.Map, layers: maplibregl.LayerSpecification[]) {
+  for (const l of layers) {
+    try {
+      const id = l.id;
+      if (l.type === 'background') {
+        map.setPaintProperty(id, 'background-color', '#071a22');
+      } else if (l.type === 'fill') {
+        const c = id === 'building' ? '#173644'
+          : id.includes('water') ? '#0f4257'
+          : /park|wood|grass/.test(id) ? '#0d2a30'
+          : id.includes('residential') ? '#0b222b'
+          : null;
+        if (c) map.setPaintProperty(id, 'fill-color', c);
+        if (id === 'building') map.setPaintProperty(id, 'fill-outline-color', '#24505f');
+      } else if (l.type === 'line') {
+        if (id.startsWith('waterway')) map.setPaintProperty(id, 'line-color', '#1c6f8c');
+        else if (/casing/.test(id)) map.setPaintProperty(id, 'line-color', '#0a1c23');
+        else if (/highway|railway|bridge|tunnel|road|aeroway/.test(id)) map.setPaintProperty(id, 'line-color', '#35606f');
+      } else if (l.type === 'symbol' && (l.layout as Record<string, unknown> | undefined)?.['text-field']) {
+        map.setPaintProperty(id, 'text-color', '#b7cdd2');
+        map.setPaintProperty(id, 'text-halo-color', '#071219');
+        map.setPaintProperty(id, 'text-halo-width', 1.2);
+      }
+    } catch {
+      /* a layer that doesn't accept that property: skip it */
+    }
+  }
+}
 
 function webglOk() {
   try {
@@ -41,8 +78,8 @@ function buildData(stations: Station[], colorBy: ColorBy): GeoJSON.FeatureCollec
     const lng = Number(st.lng), lat = Number(st.lat);
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
     const id = String(st.id);
-    features.push({ type: 'Feature', properties: { id, kind: 'bank', h: PILLAR_FULL_M, color: '#9fb8bf' }, geometry: { type: 'Polygon', coordinates: circlePolygon(lng, lat, 300) } });
-    features.push({ type: 'Feature', properties: { id, kind: 'water', h: pillarHeight(st), color: markerColor(st, colorBy) }, geometry: { type: 'Polygon', coordinates: circlePolygon(lng, lat, 200) } });
+    features.push({ type: 'Feature', properties: { id, kind: 'bank', h: PILLAR_FULL_M, color: '#9fb8bf' }, geometry: { type: 'Polygon', coordinates: circlePolygon(lng, lat, 380) } });
+    features.push({ type: 'Feature', properties: { id, kind: 'water', h: pillarHeight(st), color: markerColor(st, colorBy) }, geometry: { type: 'Polygon', coordinates: circlePolygon(lng, lat, 250) } });
   }
   return { type: 'FeatureCollection', features };
 }
@@ -91,7 +128,7 @@ export default function Map3D(props: MapProps) {
         container: box.current,
         style,
         center: CENTER,
-        zoom: 11.2,
+        zoom: 11.8,
         pitch: 60,
         bearing: -20,
         maxPitch: 80,
@@ -101,9 +138,11 @@ export default function Map3D(props: MapProps) {
       });
       mapRef.current = map;
 
-      map.on('load', () => {
+      map.on('error', (e) => console.warn('[Map3D]', e?.error?.message ?? e));
+      map.once('style.load', () => {
         if (!map) return;
         const s = map.getStyle();
+        retheme(map, s.layers);
         // 3D buildings: reuse the style's own if it has them, otherwise extrude the vector "building" layer
         const vec = Object.keys(s.sources).find((k) => s.sources[k].type === 'vector');
         if (vec && !s.layers.some((l) => l.type === 'fill-extrusion')) {
@@ -128,14 +167,14 @@ export default function Map3D(props: MapProps) {
           type: 'fill-extrusion',
           source: SRC,
           filter: ['==', ['get', 'kind'], 'bank'],
-          paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.16 },
+          paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': HEIGHT_EXPR, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.16 },
         });
         map.addLayer({
           id: 'water-pillars',
           type: 'fill-extrusion',
           source: SRC,
           filter: ['==', ['get', 'kind'], 'water'],
-          paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.95 },
+          paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': HEIGHT_EXPR, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.95 },
         });
 
         for (const layer of ['water-pillars', 'bank-tubes']) {

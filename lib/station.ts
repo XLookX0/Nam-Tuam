@@ -63,7 +63,7 @@ export const fmtChange = (v?: number) =>
 /* ---------- 3D map helpers ---------- */
 
 /** Height of a "full" pillar (= water at bank top) in metres. Exaggerated on purpose so it reads at city zoom. */
-export const PILLAR_FULL_M = 800;
+export const PILLAR_FULL_M = 3000;
 
 /** Pillar height scales with how close the water is to the bank (capped at 110%). */
 export const pillarHeight = (s: Station) =>
