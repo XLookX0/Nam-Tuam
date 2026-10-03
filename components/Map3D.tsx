@@ -112,14 +112,14 @@ async function loadStyle() {
 }
 
 /** Two shapes per station: a translucent "bank" tube at full height and a solid water pillar inside it. */
-function buildData(stations: Station[], colorBy: ColorBy): GeoJSON.FeatureCollection {
+function buildData(stations: Station[], colorBy: ColorBy, heights?: Map<string, number>): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = [];
   for (const st of stations) {
     const lng = Number(st.lng), lat = Number(st.lat);
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
     const id = String(st.id);
     features.push({ type: 'Feature', properties: { id, kind: 'bank', h: PILLAR_FULL_M, color: '#9fb8bf' }, geometry: { type: 'Polygon', coordinates: circlePolygon(lng, lat, 380) } });
-    features.push({ type: 'Feature', properties: { id, kind: 'water', h: pillarHeight(st), color: markerColor(st, colorBy) }, geometry: { type: 'Polygon', coordinates: circlePolygon(lng, lat, 250) } });
+    features.push({ type: 'Feature', properties: { id, kind: 'water', h: heights?.get(id) ?? pillarHeight(st), color: markerColor(st, colorBy) }, geometry: { type: 'Polygon', coordinates: circlePolygon(lng, lat, 250) } });
   }
   return { type: 'FeatureCollection', features };
 }
@@ -185,6 +185,8 @@ export default function Map3D(props: MapProps) {
         minZoom: 9,
         maxBounds: BOUNDS,
         attributionControl: { compact: true },
+        // Cap the render resolution: retina phones otherwise draw 3-4x the pixels for little visible gain
+        pixelRatio: Math.min(window.devicePixelRatio || 1, ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 4 ? 1.5 : 2),
       });
       mapRef.current = map;
 
@@ -263,10 +265,36 @@ export default function Map3D(props: MapProps) {
     };
   }, []);
 
-  // Keep pillars in sync with data and colour mode
+  // Keep pillars in sync with data and colour mode. Heights ease to their new value (nice during history playback).
+  const shownH = useRef(new Map<string, number>());
   useEffect(() => {
     const src = mapRef.current?.getSource(SRC) as ml.GeoJSONSource | undefined;
-    if (ready && src) src.setData(buildData(stations, colorBy));
+    if (!ready || !src) return;
+    const target = new Map<string, number>(stations.map((st) => [String(st.id), pillarHeight(st)]));
+    const from = new Map(shownH.current);
+    const moving = [...target].some(([id, to]) => Math.abs(to - (from.get(id) ?? to)) > 1);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!moving || reduce || from.size === 0) {
+      shownH.current = target;
+      src.setData(buildData(stations, colorBy, target));
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const frame = (now: number) => {
+      const k = Math.min((now - t0) / 600, 1);
+      const e = 1 - Math.pow(1 - k, 3);
+      const cur = new Map<string, number>();
+      target.forEach((to, id) => {
+        const fr = from.get(id) ?? to;
+        cur.set(id, fr + (to - fr) * e);
+      });
+      shownH.current = cur;
+      src.setData(buildData(stations, colorBy, cur));
+      if (k < 1) raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
   }, [ready, stations, colorBy]);
 
   // Fly to the selected station and show its popup
