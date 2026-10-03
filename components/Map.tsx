@@ -100,8 +100,7 @@ export default function FloodMap({ stations, selectedStation, focusKey, colorBy 
       zoomControl={false}
     >
       <TileLayer
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-        subdomains="abcd"
+        url="https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_47se_1_8b93bc2f9c99b721b2d3608a"
         attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       />
       <Controller selected={selectedStation} focusKey={focusKey} markers={markers} />
