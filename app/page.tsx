@@ -306,7 +306,7 @@ export default function Dashboard() {
               <span className={STATUS[overall].text}>{loading && !stations.length ? '...' : headline}</span>
             </h1>
             <p className="mt-4 text-[#9fb8bf] max-w-md leading-relaxed">
-              ดูว่าน้ำสูงใกล้ตลิ่งแค่ไหนในแต่ละสถานี กำลังขึ้นหรือลด และสถานีไหนต้องระวัง ข้อมูลรีเฟรชทุก 1 นาที
+              ดูว่าน้ำสูงใกล้ตลิ่งแค่ไหนในแต่ละสถานี กำลังขึ้นหรือลด และสถานีไหนต้องระวัง ข้อมูลรีเฟรชทุก 15 นาที
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button onClick={locate} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#4fd1c5] text-[#06242a] font-medium text-sm hover:brightness-110 transition">
