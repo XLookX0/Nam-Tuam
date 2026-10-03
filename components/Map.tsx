@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { ArrowUp, ArrowDown, Minus, ExternalLink } from 'lucide-react';
-import { Station, ColorBy, isStale, markerColor, fmtTime, fmtChange } from '@/lib/station';
+import { Station, ColorBy, CameraMode, MapLayers, isStale, markerColor, fmtTime, fmtChange } from '@/lib/station';
 import 'leaflet/dist/leaflet.css';
 
 export type { Station } from '@/lib/station';
@@ -20,6 +20,12 @@ export interface MapProps {
   onSelect?: (s: Station) => void;
   /** Used by the 3D map: called when WebGL or the 3D style can't load, so the page can fall back to 2D. */
   onUnsupported?: () => void;
+  /** 3D only: camera preset request. Bump `key` to re-trigger the same mode. */
+  camera?: { mode: CameraMode | null; key: number } | null;
+  /** 3D only: basemap layer visibility. */
+  layers?: MapLayers;
+  /** 3D only: the map ended a camera mode itself (e.g. the user grabbed the map during the tour). */
+  onCameraEnd?: () => void;
 }
 
 const CENTER: [number, number] = [13.4093, 100.0022];

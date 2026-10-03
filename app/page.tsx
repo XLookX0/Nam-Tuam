@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapWrapper from '@/components/MapWrapper';
 import TideChart from '@/components/TideChart';
-import { Station, ColorBy, isStale, haversineKm, fmtTime, fmtChange } from '@/lib/station';
-import { Droplets, Search, Waves, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
+import { Station, ColorBy, CameraMode, MapLayers, isStale, haversineKm, fmtTime, fmtChange } from '@/lib/station';
+import { Droplets, Search, Waves, Building, Building2, Compass, Route, Map as MapIcon, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
 
 type Filter = 'all' | 'rising' | 'falling' | 'warning' | 'critical' | 'stale';
 type Sort = 'capacity' | 'change' | 'level' | 'name' | 'updated';
@@ -106,6 +106,8 @@ export default function Dashboard() {
   const [sort, setSort] = useState<Sort>('capacity');
   const [colorBy, setColorBy] = useState<ColorBy>('level');
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [cam, setCam] = useState<{ mode: CameraMode | null; key: number }>({ mode: null, key: 0 });
+  const [layers, setLayers] = useState<MapLayers>({ canals: true, roads: true, buildings: true });
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [toast, setToast] = useState('');
   const [tab, setTab] = useState<Tab>('stations');
@@ -310,6 +312,9 @@ export default function Dashboard() {
           colorBy={colorBy}
           userPos={userPos}
           onSelect={pick}
+          camera={cam}
+          layers={layers}
+          onCameraEnd={() => setCam((c) => ({ ...c, mode: null }))}
           onUnsupported={() => {
             setViewMode('2d');
             say('เปิดแผนที่ 3 มิติไม่ได้ในอุปกรณ์นี้ จึงกลับไปแบบ 2 มิติ');
@@ -339,7 +344,7 @@ export default function Dashboard() {
           </button>
         </header>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
           <div role="group" aria-label="โหมดแผนที่" className={`${glass} pointer-events-auto flex rounded-xl p-0.5 text-xs`}>
             {(['2d', '3d'] as const).map((m) => (
               <button key={m} onClick={() => setViewMode(m)} aria-pressed={viewMode === m}
@@ -354,7 +359,7 @@ export default function Dashboard() {
                 className={`px-3 py-1.5 rounded-[10px] transition ${colorBy === v ? 'bg-cyan-400 text-zinc-950 font-medium' : 'text-zinc-300 hover:text-white'}`}>{l}</button>
             ))}
           </div>
-          <div className={`${glass} hidden sm:flex items-center gap-3 rounded-xl px-3 py-2 text-xs text-zinc-300`}>
+          <div className={`${glass} hidden sm:flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-xs text-zinc-300`}>
             {(colorBy === 'level'
               ? [['#3ecf8e', 'ปกติ'], ['#f5b544', 'เฝ้าระวัง'], ['#ff5d5d', 'วิกฤต']]
               : [['#ff7a59', 'ขึ้น'], ['#4fd1c5', 'ลด'], ['#7f9ca4', 'ทรงตัว']]
@@ -362,10 +367,42 @@ export default function Dashboard() {
               <span key={l} className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ background: c }} />{l}</span>
             ))}
             <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full border-2 border-zinc-500" />ไม่ส่งค่า</span>
-            {viewMode === '3d' && <span className="text-zinc-300">แท่งสี = ระดับน้ำ หลอดใส = ขอบตลิ่ง</span>}
+            {viewMode === '3d' && <span className="text-zinc-300">แท่ง = น้ำ หลอดใส = ตลิ่ง</span>}
           </div>
         </div>
       </div>
+
+      {/* 3D controls: camera presets and basemap layers */}
+      {viewMode === '3d' && (
+        <div className="absolute z-30 right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 pointer-events-none">
+          <div className={`${glass} pointer-events-auto flex flex-col gap-1 p-1 rounded-2xl`}>
+            {([
+              ['city', 'มุมเมือง', Building2],
+              ['top', 'มองจากบน', MapIcon],
+              ['tour', 'สำรวจจุดวัด', Compass],
+            ] as [CameraMode, string, typeof Building2][]).map(([m, label, Icon]) => (
+              <button key={m} title={label} aria-label={label} aria-pressed={cam.mode === m}
+                onClick={() => { setCam((c) => ({ mode: m, key: c.key + 1 })); if (m === 'tour') setSheet('peek'); }}
+                className={`grid place-items-center size-10 rounded-xl transition ${cam.mode === m ? 'bg-cyan-400 text-zinc-950' : 'text-zinc-300 hover:bg-white/10'}`}>
+                <Icon className="size-[18px]" />
+              </button>
+            ))}
+          </div>
+          <div className={`${glass} pointer-events-auto flex flex-col gap-1 p-1 rounded-2xl`}>
+            {([
+              ['canals', 'คลอง', Waves],
+              ['roads', 'ถนน', Route],
+              ['buildings', 'ตึก', Building],
+            ] as [keyof MapLayers, string, typeof Waves][]).map(([k, label, Icon]) => (
+              <button key={k} title={label} aria-label={label} aria-pressed={layers[k]}
+                onClick={() => setLayers((l) => ({ ...l, [k]: !l[k] }))}
+                className={`grid place-items-center size-10 rounded-xl transition ${layers[k] ? 'text-cyan-300 bg-cyan-400/15' : 'text-zinc-400 hover:bg-white/10'}`}>
+                <Icon className="size-[18px]" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Sidebar (md+) / bottom sheet (mobile) */}
       <aside

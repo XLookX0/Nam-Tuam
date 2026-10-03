@@ -319,3 +319,48 @@ body {
 .maplibregl-ctrl-attrib a {
   color: #9fb8bf !important;
 }
+
+/* ---------- 3D name cards ---------- */
+.flood-label {
+  cursor: pointer;
+  pointer-events: auto;
+}
+.flood-label-card {
+  position: relative;
+  white-space: nowrap;
+  text-align: center;
+  padding: 6px 11px;
+  border-radius: 10px;
+  color: #e8f1ef;
+  background: rgba(7, 18, 25, 0.88);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid color-mix(in srgb, var(--c) 65%, transparent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 18px -4px var(--c);
+}
+.flood-label-card::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(7, 18, 25, 0.95);
+  border-right: 1px solid color-mix(in srgb, var(--c) 65%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--c) 65%, transparent);
+}
+.fl-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.fl-meta {
+  margin-top: 1px;
+  font-size: 11px;
+  color: #b7cdd2;
+}
+.fl-meta b {
+  color: var(--c);
+  font-weight: 600;
+}

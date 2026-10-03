@@ -16,6 +16,12 @@ export interface Station {
 }
 
 export type ColorBy = 'level' | 'trend';
+export type CameraMode = 'city' | 'top' | 'tour';
+export interface MapLayers {
+  canals: boolean;
+  roads: boolean;
+  buildings: boolean;
+}
 
 export const STALE_MS = 3 * 60 * 60 * 1000;
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type * as ml from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Station, ColorBy, markerColor, pillarHeight, circlePolygon, fmtTime, PILLAR_FULL_M } from '@/lib/station';
+import { Station, ColorBy, markerColor, pillarHeight, circlePolygon, fmtTime, isStale, PILLAR_FULL_M } from '@/lib/station';
 import type { MapProps } from './Map';
 
 // Next.js/Turbopack mangles MapLibre's web worker ("Worker failed to load"), so the library itself is loaded at
@@ -54,6 +54,7 @@ function retheme(map: ml.Map, layers: ml.LayerSpecification[]) {
           : /park|wood|grass/.test(id) ? '#0d2a30'
           : id.includes('residential') ? '#0b222b'
           : null;
+        if ((l.paint as Record<string, unknown> | undefined)?.['fill-pattern']) map.setPaintProperty(id, 'fill-pattern', undefined);
         if (c) map.setPaintProperty(id, 'fill-color', c);
         if (id === 'building') map.setPaintProperty(id, 'fill-outline-color', '#24505f');
       } else if (l.type === 'line') {
@@ -69,6 +70,14 @@ function retheme(map: ml.Map, layers: ml.LayerSpecification[]) {
       /* a layer that doesn't accept that property: skip it */
     }
   }
+}
+
+const shortName = (n: string) => n.replace(/\s*\(.*\)/, '').replace(/^สถานี(วัดน้ำ)?/, '').trim() || n;
+
+function labelHtml(st: Station) {
+  const cm = Math.round((Number(st.bankHeight) - Number(st.waterLevel)) * 100);
+  const rel = cm >= 0 ? `ต่ำกว่าตลิ่ง ${cm} ซม.` : `สูงกว่าตลิ่ง ${-cm} ซม.`;
+  return `<div class="flood-label-card" style="--c:${markerColor(st, 'level')}"><div class="fl-name">${esc(shortName(st.name))}</div><div class="fl-meta"><b>${st.waterLevel} ม.</b> ${rel}</div></div>`;
 }
 
 function webglOk() {
@@ -125,12 +134,13 @@ function popupHtml(st: Station) {
 }
 
 export default function Map3D(props: MapProps) {
-  const { stations, selectedStation, focusKey, colorBy = 'level', userPos } = props;
+  const { stations, selectedStation, focusKey, colorBy = 'level', userPos, camera, layers } = props;
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<ml.Map | null>(null);
   const popupRef = useRef<ml.Popup | null>(null);
   const userRef = useRef<ml.Marker | null>(null);
   const glRef = useRef<MapLibre | null>(null);
+  const layerIds = useRef<{ canals: string[]; roads: string[]; buildings: string[] }>({ canals: [], roads: [], buildings: [] });
   const propsRef = useRef(props);
   propsRef.current = props;
   const [ready, setReady] = useState(false);
@@ -196,6 +206,13 @@ export default function Map3D(props: MapProps) {
           });
         }
 
+        const all = map.getStyle().layers;
+        layerIds.current = {
+          canals: all.filter((x) => x.id.startsWith('waterway')).map((x) => x.id),
+          roads: all.filter((x) => x.type === 'line' && /highway|road|bridge|tunnel|railway/.test(x.id)).map((x) => x.id),
+          buildings: all.filter((x) => x.id === 'building' || x.type === 'fill-extrusion').map((x) => x.id),
+        };
+
         map.addSource(SRC, { type: 'geojson', data: buildData(propsRef.current.stations, propsRef.current.colorBy ?? 'level') });
         map.addLayer({
           id: 'bank-tubes',
@@ -255,6 +272,91 @@ export default function Map3D(props: MapProps) {
       .setHTML(popupHtml(st))
       .addTo(map);
   }, [ready, selId, focusKey]);
+
+  // Layer toggles (canals / roads / buildings)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || !layers) return;
+    for (const k of ['canals', 'roads', 'buildings'] as const) {
+      for (const id of layerIds.current[k]) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', layers[k] ? 'visible' : 'none');
+      }
+    }
+  }, [ready, layers]);
+
+  // Camera presets: city view, top-down, and a guided tour of the stations closest to their banks
+  const camMode = camera?.mode;
+  const camKey = camera?.key;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || !camKey || !camMode) return;
+    if (camMode === 'city') {
+      map.flyTo({ center: CENTER, zoom: 11.8, pitch: 60, bearing: -20, duration: 1600, essential: true });
+      return;
+    }
+    if (camMode === 'top') {
+      map.flyTo({ pitch: 0, bearing: 0, duration: 1200, essential: true });
+      return;
+    }
+    // tour
+    const stops = propsRef.current.stations
+      .filter((s) => !isStale(s))
+      .sort((a, b) => Number(b.capacityPercent) - Number(a.capacityPercent))
+      .slice(0, 6);
+    if (!stops.length) {
+      propsRef.current.onCameraEnd?.();
+      return;
+    }
+    let i = 0;
+    const go = () => propsRef.current.onSelect?.(stops[i++ % stops.length]);
+    go();
+    const timer = setInterval(go, 6500);
+    const canvas = map.getCanvas();
+    const stop = () => propsRef.current.onCameraEnd?.();
+    canvas.addEventListener('pointerdown', stop, { once: true });
+    return () => {
+      clearInterval(timer);
+      canvas.removeEventListener('pointerdown', stop);
+    };
+  }, [ready, camKey, camMode]);
+
+  // Floating name cards above the pillars of stations that need attention (plus the selected one)
+  useEffect(() => {
+    const map = mapRef.current;
+    const gl = glRef.current;
+    if (!ready || !map || !gl) return;
+    const picks = stations
+      .filter((s) => !isStale(s) && (s.status !== 'normal' || s.id === selId))
+      .sort((a, b) => Number(b.capacityPercent) - Number(a.capacityPercent))
+      .slice(0, 6);
+    const items = picks.map((st) => {
+      const el = document.createElement('div');
+      el.className = 'flood-label';
+      el.innerHTML = labelHtml(st);
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        propsRef.current.onSelect?.(st);
+      });
+      const marker = new gl.Marker({ element: el, anchor: 'bottom' }).setLngLat([Number(st.lng), Number(st.lat)]).addTo(map);
+      return { st, marker };
+    });
+    // Lift each card to the top of its pillar (same zoom scaling as the extrusion height expression)
+    const place = () => {
+      const z = map.getZoom();
+      const f = z <= 10 ? 1 : z >= 14 ? 0.3 : 1 - (z - 10) * 0.175;
+      const sinP = Math.sin((map.getPitch() * Math.PI) / 180);
+      for (const { st, marker } of items) {
+        const mpp = (156543.03392 * Math.cos((Number(st.lat) * Math.PI) / 180)) / Math.pow(2, z);
+        marker.setOffset([0, -(pillarHeight(st) * f * sinP) / mpp - 8]);
+      }
+    };
+    place();
+    map.on('move', place);
+    return () => {
+      map.off('move', place);
+      items.forEach((it) => it.marker.remove());
+    };
+  }, [ready, stations, selId]);
 
   // "My location" dot
   useEffect(() => {
