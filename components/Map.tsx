@@ -59,7 +59,7 @@ function Controller({
     const st = latest.current;
     if (!st) return;
     const open = () => markers.current.get(st.id)?.openPopup();
-    const ll = L.latLng(st.lat, st.lng);
+    const ll = L.latLng(Number(st.lat), Number(st.lng));
     // Don't yank the map around if the station is already comfortably in view
     if (map.getZoom() >= 13 && map.getBounds().contains(ll)) {
       open();
@@ -119,7 +119,7 @@ export default function FloodMap({ stations, selectedStation, focusKey, colorBy 
         return (
           <Marker
             key={st.id}
-            position={[st.lat, st.lng]}
+            position={[Number(st.lat), Number(st.lng)]}
             icon={icon}
             ref={(m) => {
               if (m) markers.current.set(st.id, m);
