@@ -23,6 +23,7 @@ Snapshot format: `{ "t": <epoch ms>, "d": { "<stationId>": [level, capacity%, st
 
 ## Quick health checks
 - Worker URL with `?record=1` appended records one history snapshot on demand (the cron records automatically).
+- Worker URL with `?backfill=1` rebuilds the last 24 h of history from the simulation in one go (refused when real data is flowing).
 - `/api/history` -> `{"snapshots":[...]}`; the count grows by 1 every 15 minutes (cached up to 2 min).
 - The slider bar needs 2 snapshots; a full 24 h takes a day to fill.
 
@@ -32,7 +33,7 @@ Snapshot format: `{ "t": <epoch ms>, "d": { "<stationId>": [level, capacity%, st
 - **If 3D shows blank**: open DevTools console and look for `[Map3D]` messages. WebGL or CDN failures drop the user back to 2D automatically.
 - **Share links**: `?station=<id>` opens a station; `?view=3d` opens the 3D map.
 - **Weak phones** start with 3D buildings off (dock button turns them on) and a capped render resolution.
-- **Test data:** while the government API is unavailable the Worker serves fallback stations (with a small made-up drift so the slider has something to show). Remove the drift block once real data flows.
+- **Simulated data:** while the government API is unavailable the Worker serves 9 stations in Mueang, Amphawa and Bang Khonthi (approximate coordinates) whose levels follow a harmonic tide model with per-station lag and strength; tides on the dashboard come from the same model. Tune `SURGE_M` in `worker.js` for calmer or more dramatic data. Station 9 is offline on purpose to show the "ไม่ส่งค่า" state (remove `offlineHours` to bring it online). When live data works, the Worker uses it automatically; the tide model stays until a tide source is added.
 - **Install as an app**: the site ships a web app manifest and icons, so phones offer "Add to Home Screen".
 
 ## Ideas not built yet

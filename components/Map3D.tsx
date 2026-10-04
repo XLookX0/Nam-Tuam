@@ -368,7 +368,7 @@ export default function Map3D(props: MapProps) {
     const picks = stations
       .filter((s) => !isStale(s) && (s.status !== 'normal' || s.id === selId))
       .sort((a, b) => Number(b.capacityPercent) - Number(a.capacityPercent))
-      .slice(0, 6);
+      .slice(0, window.innerWidth < 768 ? 3 : 6);
     const items = picks.map((st) => {
       const el = document.createElement('div');
       el.className = 'flood-label';

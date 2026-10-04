@@ -5,8 +5,8 @@ import MapWrapper from '@/components/MapWrapper';
 import TideChart from '@/components/TideChart';
 import { funIconSvg } from '@/lib/funIcons';
 import { Snapshot, applySnapshot, sixHourChange } from '@/lib/history';
-import { Station, ColorBy, CameraMode, MapLayers, isStale, haversineKm, fmtTime, fmtChange } from '@/lib/station';
-import { History, Play, Pause, Droplets, Search, Waves, Sailboat, PanelLeftClose, PanelLeftOpen, Building, Building2, Compass, Route, Map as MapIcon, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
+import { Station, ColorBy, CameraMode, MapLayers, COLORS, isStale, haversineKm, fmtTime, fmtChange } from '@/lib/station';
+import { History, Play, Pause, Layers, Droplets, Search, Waves, Sailboat, PanelLeftClose, PanelLeftOpen, Building, Building2, Compass, Route, Map as MapIcon, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
 
 type Filter = 'all' | 'rising' | 'falling' | 'warning' | 'critical' | 'stale';
 type Sort = 'capacity' | 'change' | 'level' | 'name' | 'updated';
@@ -32,7 +32,7 @@ const tOf = (s: Station) => TREND[s.trend] ?? TREND.stable;
 // Glass surfaces
 const glass = 'glass';
 const sub = 'rounded-2xl bg-white/[0.04] ring-1 ring-white/10';
-const iconBtn = 'grid place-items-center size-9 rounded-xl text-zinc-300 hover:bg-white/10 active:bg-white/15 transition shrink-0';
+const iconBtn = 'grid place-items-center size-10 md:size-9 rounded-xl text-zinc-300 hover:bg-white/10 active:bg-white/15 transition shrink-0';
 
 // Sheet geometry lives in globals.css (.panel[data-snap]).
 const SNAPS: Snap[] = ['peek', 'half', 'full'];
@@ -95,6 +95,104 @@ function CanalGauge({ pct, k }: { pct: number; k: Key }) {
   );
 }
 
+/** The 24h history control. Floating bar on tablet/desktop; flat row inside the bottom sheet on phones. */
+function ReplayControl({ variant, history, replay, playing, snapT, onLive, onScrub, onPlay }: {
+  variant: 'floating' | 'sheet';
+  history: Snapshot[];
+  replay: number | null;
+  playing: boolean;
+  snapT: number | null;
+  onLive: () => void;
+  onScrub: (v: number) => void;
+  onPlay: () => void;
+}) {
+  const n = history.length;
+  const floating = variant === 'floating';
+  if (n < 2) {
+    return (
+      <div className={floating ? `${glass} pointer-events-auto rounded-2xl px-4 py-2.5 text-xs text-zinc-300 flex items-center gap-2` : 'px-4 pb-3 text-xs text-zinc-400 flex items-center gap-2'}>
+        <History className="size-4 text-zinc-400" />
+        ย้อนหลัง 24 ชม. กำลังเก็บข้อมูล ({n}/2 ครั้ง)
+      </div>
+    );
+  }
+  const value = replay ?? n - 1;
+  const label = snapT ? `${(Math.round(((Date.now() - snapT) / 3.6e6) * 10) / 10).toFixed(1)} ชม. ก่อน` : 'ปัจจุบัน';
+  const range = (
+    <input type="range" className="replay-range flex-1 min-w-0" aria-label="เลื่อนดูระดับน้ำย้อนหลัง"
+      min={0} max={n - 1} step={1} value={value}
+      style={{ '--p': `${(value / (n - 1)) * 100}%` } as React.CSSProperties}
+      onChange={(e) => onScrub(Number(e.target.value))} />
+  );
+  const play = (
+    <button onClick={onPlay} aria-label={playing ? 'หยุดเล่น' : 'เล่นย้อนหลัง'} title={playing ? 'หยุดเล่น' : 'เล่นย้อนหลัง'}
+      className={`grid place-items-center ${floating ? 'size-10' : 'size-9'} rounded-full bg-cyan-400 text-zinc-950 hover:brightness-110 active:scale-95 transition shrink-0`}>
+      {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
+    </button>
+  );
+
+  if (floating) {
+    return (
+      <div className={`${glass} pointer-events-auto flex items-center gap-3 rounded-2xl pl-3 pr-2 py-2 w-full max-w-2xl`}>
+        <button onClick={onLive} disabled={replay == null} aria-label="กลับไปปัจจุบัน" title="กลับไปปัจจุบัน"
+          className={`${iconBtn} ${replay == null ? 'opacity-60' : 'bg-cyan-400/15 text-cyan-300'}`}>
+          <History className="size-[18px]" />
+        </button>
+        <div className="min-w-0 shrink-0 w-[92px] leading-tight">
+          <div className="text-[11px] text-zinc-400">ย้อนหลัง 24 ชม.</div>
+          <div className={`text-sm font-medium truncate ${snapT ? 'text-cyan-300' : 'text-zinc-100'}`}>{label}</div>
+        </div>
+        {range}
+        {play}
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 pb-2">
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="flex items-center gap-1.5 text-zinc-400"><History className="size-3.5" /> ย้อนหลัง 24 ชม.</span>
+        {replay == null ? (
+          <span className="flex items-center gap-1.5 text-zinc-200"><span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" /> สด</span>
+        ) : (
+          <button onClick={onLive} className="rounded-full bg-cyan-400/15 px-2.5 py-0.5 font-medium text-cyan-300 active:bg-cyan-400/25">
+            {label} · กลับสด
+          </button>
+        )}
+      </div>
+      <div className="mt-1 flex items-center gap-3">
+        {play}
+        {range}
+      </div>
+    </div>
+  );
+}
+
+/** Tiny 24 h capacity trend for a station card; the dot marks the moment being shown. */
+function Spark({ id, history, at, color }: { id: string; history: Snapshot[]; at: number | null; color: string }) {
+  const pts = history.map((x) => x.d[id]?.[1]);
+  const vals = pts.filter((v): v is number => v != null);
+  if (vals.length < 2) return <span className="w-24" />;
+  const lo = Math.min(...vals);
+  const span = Math.max(Math.max(...vals) - lo, 6);
+  const W = 96, Hh = 22, n = pts.length;
+  const x = (i: number) => (i / (n - 1)) * W;
+  const y = (v: number) => Hh - 3 - ((v - lo) / span) * (Hh - 6);
+  let d = '';
+  pts.forEach((v, i) => {
+    if (v == null) return;
+    d += `${d && pts[i - 1] != null ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`;
+  });
+  const cur = at ?? n - 1;
+  const cv = pts[cur];
+  return (
+    <svg viewBox={`0 0 ${W} ${Hh}`} className="h-[22px] w-24 shrink-0" aria-hidden="true">
+      <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+      {cv != null && <circle cx={x(cur)} cy={y(cv)} r="2.6" fill={color} stroke="#071219" strokeWidth="1.2" />}
+    </svg>
+  );
+}
+
 export default function Dashboard() {
   const [rawStations, setStations] = useState<Station[]>([]);
   const [tides, setTides] = useState<any>(null);
@@ -109,9 +207,22 @@ export default function Dashboard() {
   const [colorBy, setColorBy] = useState<ColorBy>('level');
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [fun, setFun] = useState(false);
+  const [dockMore, setDockMore] = useState(false);
+
+  // The collapsed sheet is exactly as tall as its top block (handle, summary, history slider, tabs), whatever it contains.
+  const topRef = useRef<HTMLDivElement>(null);
+  const [peekH, setPeekH] = useState(232);
+  useEffect(() => {
+    const el = topRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setPeekH(Math.ceil(el.getBoundingClientRect().height) + 6));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [panelOpen, setPanelOpen] = useState(true);
   const [cam, setCam] = useState<{ mode: CameraMode | null; key: number }>({ mode: null, key: 0 });
   const [layers, setLayers] = useState<MapLayers>({ canals: true, roads: true, buildings: true });
+  const [loadError, setLoadError] = useState(false);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [toast, setToast] = useState('');
   const [tab, setTab] = useState<Tab>('stations');
@@ -184,23 +295,49 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const res = await fetch('/api/water-data');
+      if (!res.ok) throw new Error(`water-data responded ${res.status}`);
       const data = await res.json();
+      setLoadError(false);
       setStations(data.waterLevels || []);
       setTides(data.tides || null);
       setLastUpdated(data.lastUpdated || '');
     } catch (err) {
       console.error('Failed to load data:', err);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    pendingId.current = new URLSearchParams(window.location.search).get('station');
+    const sp = new URLSearchParams(window.location.search);
+    pendingId.current = sp.get('station');
+    if (sp.get('view') === '3d') setViewMode('3d');
+    // Weak devices: start without 3D buildings (the heaviest layer); they can switch it on from the dock
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    if ((nav.deviceMemory != null && nav.deviceMemory <= 2) || (nav.hardwareConcurrency != null && nav.hardwareConcurrency <= 2)) {
+      setLayers((l) => ({ ...l, buildings: false }));
+    }
     fetchData();
-    const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
+    // Don't poll while the tab is hidden; refresh as soon as it's visible again
+    const tick = () => {
+      if (!document.hidden) fetchData();
+    };
+    const interval = setInterval(tick, 60000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, [fetchData]);
+
+  // Keep ?view=3d in the address bar so shared links open in the same mode
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (viewMode === '3d') u.searchParams.set('view', '3d');
+    else u.searchParams.delete('view');
+    window.history.replaceState(null, '', u);
+  }, [viewMode]);
 
   // Open a shared station link once data has arrived
   useEffect(() => {
@@ -313,7 +450,7 @@ export default function Dashboard() {
   // Sheet handle: the sheet follows the finger, then snaps to the nearest position (velocity-aware). A tap cycles.
   const visibleFor = (snap: Snap) => {
     const H = window.innerHeight;
-    return snap === 'peek' ? 216 : snap === 'half' ? H * 0.55 : H * 0.9;
+    return snap === 'peek' ? peekH : snap === 'half' ? H * 0.55 : H * 0.9;
   };
   const onHandleDown = (e: React.PointerEvent<HTMLDivElement>) => {
     gesture.current = { y0: e.clientY, y: e.clientY, t: performance.now(), v: 0 };
@@ -346,6 +483,22 @@ export default function Dashboard() {
     setSheet(nearest);
   };
 
+  const onLive = () => {
+    setPlaying(false);
+    setReplay(null);
+  };
+  const onScrub = (v: number) => {
+    setPlaying(false);
+    setReplay(v >= history.length - 1 ? null : v);
+  };
+  const onPlay = () => {
+    if (playing) return setPlaying(false);
+    if (replay == null || replay >= history.length - 1) setReplay(0);
+    setPlaying(true);
+  };
+  const replayProps = { history, replay, playing, snapT: replaySnap ? replaySnap.t : null, onLive, onScrub, onPlay };
+  const tint = overall === 'critical' ? 'rgba(255,93,93,0.16)' : overall === 'warning' ? 'rgba(245,181,68,0.13)' : 'rgba(79,209,197,0.11)';
+
   const summary: ['all' | 'warning' | 'critical', string, number][] = [
     ['all', 'ทั้งหมด', stations.length],
     ['warning', 'เฝ้าระวัง', counts.warning],
@@ -360,7 +513,7 @@ export default function Dashboard() {
   const trendTotal = counts.rising + counts.falling + counts.stable || 1;
 
   return (
-    <main className="app text-zinc-100" data-panel={panelOpen ? 'open' : 'closed'}>
+    <main className="app text-zinc-100" data-panel={panelOpen ? 'open' : 'closed'} style={{ '--peek-h': `${peekH}px` } as React.CSSProperties}>
       {/* Map: always in the background. Between md and lg it starts right of the sidebar so stations aren't centred underneath it. */}
       <div className="map-layer">
         <MapWrapper
@@ -385,17 +538,19 @@ export default function Dashboard() {
       {/* Floating header */}
       <div className="hud">
         <header className={`${glass} pointer-events-auto flex items-center gap-1.5 h-12 pl-3 pr-1.5 rounded-2xl w-full md:w-auto shadow-lg shadow-black/30`}>
-          <div className="flex items-center gap-2 min-w-0 flex-1 md:hidden">
-            <span className="grid place-items-center size-7 rounded-lg bg-cyan-400/15 text-cyan-300"><Droplets className="size-4" /></span>
-            <span className="font-semibold text-sm truncate">สมุทรสงคราม</span>
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 md:hidden">
+            <span className="grid place-items-center size-8 rounded-xl bg-cyan-400/15 text-cyan-300 shrink-0"><Droplets className="size-4" /></span>
+            <div className="min-w-0 leading-tight">
+              <div className="font-semibold text-sm truncate">สมุทรสงคราม</div>
+              <div className="flex items-center gap-1.5 text-[11px] text-zinc-300">
+                <span className={`size-1.5 rounded-full ${replaySnap ? 'bg-cyan-400' : feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+                {replaySnap ? 'ย้อนดู' : 'อัปเดต'} {time} น.
+              </div>
+            </div>
           </div>
           <span className="hidden md:flex items-center gap-2 pr-2 text-xs text-zinc-300">
             <span className={`size-2 rounded-full ${replaySnap ? 'bg-cyan-400' : feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
             {replaySnap ? 'ย้อนดู' : 'อัปเดต'} {time} น.
-          </span>
-          <span className="md:hidden flex items-center gap-1.5 text-xs text-zinc-300 pr-1">
-            <span className={`size-1.5 rounded-full ${replaySnap ? 'bg-cyan-400' : feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
-            {time} น.
           </span>
           <button onClick={locate} aria-label="ตำแหน่งของฉัน" className={iconBtn}><LocateFixed className="size-4" /></button>
           <button onClick={() => share()} aria-label="แชร์หน้านี้" className={iconBtn}><Share2 className="size-4" /></button>
@@ -404,8 +559,8 @@ export default function Dashboard() {
           </button>
         </header>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 max-w-full">
-          <div role="group" aria-label="โหมดแผนที่" className={`${glass} pointer-events-auto flex rounded-xl p-0.5 text-xs`}>
+        <div className="flex items-center justify-between md:justify-end md:flex-wrap gap-2 max-w-full">
+          <div role="group" aria-label="โหมดแผนที่" className={`${glass} pointer-events-auto flex shrink-0 rounded-xl p-0.5 text-xs`}>
             {(['2d', '3d'] as const).map((m) => (
               <button key={m} onClick={() => setViewMode(m)} aria-pressed={viewMode === m}
                 className={`px-3 py-1.5 rounded-[10px] font-medium transition ${viewMode === m ? 'bg-cyan-400 text-zinc-950' : 'text-zinc-300 hover:text-white'}`}>
@@ -413,10 +568,12 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          <div role="group" aria-label="สีของจุด" className={`${glass} pointer-events-auto flex rounded-xl p-0.5 text-xs`}>
-            {([['level', 'ตามระดับน้ำ'], ['trend', 'ตามทิศทาง']] as [ColorBy, string][]).map(([v, l]) => (
+          <div role="group" aria-label="สีของจุด" className={`${glass} pointer-events-auto flex shrink-0 rounded-xl p-0.5 text-xs`}>
+            {([['level', 'ระดับ', 'ตามระดับน้ำ'], ['trend', 'ทิศทาง', 'ตามทิศทาง']] as [ColorBy, string, string][]).map(([v, short, l]) => (
               <button key={v} onClick={() => setColorBy(v)} aria-pressed={colorBy === v}
-                className={`px-3 py-1.5 rounded-[10px] transition ${colorBy === v ? 'bg-cyan-400 text-zinc-950 font-medium' : 'text-zinc-300 hover:text-white'}`}>{l}</button>
+                className={`px-3 py-1.5 rounded-[10px] transition ${colorBy === v ? 'bg-cyan-400 text-zinc-950 font-medium' : 'text-zinc-300 hover:text-white'}`}>
+                <span className="md:hidden">{short}</span><span className="hidden md:inline">{l}</span>
+              </button>
             ))}
           </div>
           <div className={`${glass} hidden xl:flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-xs text-zinc-300`}>
@@ -440,54 +597,14 @@ export default function Dashboard() {
         </button>
       )}
 
-      {/* 24-hour history slider */}
-      {history.length < 2 ? (
-        <div className="replay-bar">
-          <div className={`${glass} pointer-events-auto rounded-2xl px-4 py-2.5 text-xs text-zinc-300 flex items-center gap-2`}>
-            <History className="size-4 text-zinc-400" />
-            ย้อนหลัง 24 ชม. กำลังเก็บข้อมูล ({history.length}/2 ครั้ง)
-          </div>
-        </div>
-      ) : (
-        <div className={`replay-bar ${sheet === 'peek' ? '' : 'max-md:hidden'}`}>
-          <div className={`${glass} pointer-events-auto flex items-center gap-3 rounded-2xl pl-3 pr-2 py-2 w-full max-w-2xl`}>
-            <button onClick={() => { setPlaying(false); setReplay(null); }} disabled={replay == null}
-              aria-label="กลับไปปัจจุบัน" title="กลับไปปัจจุบัน"
-              className={`${iconBtn} ${replay == null ? 'opacity-60' : 'bg-cyan-400/15 text-cyan-300'}`}>
-              <History className="size-[18px]" />
-            </button>
-            <div className="min-w-0 shrink-0 w-[92px] leading-tight">
-              <div className="text-[11px] text-zinc-400">ย้อนหลัง 24 ชม.</div>
-              <div className={`text-sm font-medium truncate ${replaySnap ? 'text-cyan-300' : 'text-zinc-100'}`}>
-                {replaySnap ? `${(Math.round(((Date.now() - replaySnap.t) / 3.6e6) * 10) / 10).toFixed(1)} ชม. ก่อน` : 'ปัจจุบัน'}
-              </div>
-            </div>
-            <input type="range" className="replay-range flex-1 min-w-0" aria-label="เลื่อนดูระดับน้ำย้อนหลัง"
-              min={0} max={history.length - 1} step={1}
-              value={replay ?? history.length - 1}
-              style={{ '--p': `${((replay ?? history.length - 1) / (history.length - 1)) * 100}%` } as React.CSSProperties}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setPlaying(false);
-                setReplay(v >= history.length - 1 ? null : v);
-              }} />
-            <button
-              onClick={() => {
-                if (playing) return setPlaying(false);
-                if (replay == null || replay >= history.length - 1) setReplay(0);
-                setPlaying(true);
-              }}
-              aria-label={playing ? 'หยุดเล่น' : 'เล่นย้อนหลัง'} title={playing ? 'หยุดเล่น' : 'เล่นย้อนหลัง'}
-              className="grid place-items-center size-10 rounded-full bg-cyan-400 text-zinc-950 hover:brightness-110 transition shrink-0">
-              {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 24-hour history slider: floating on tablet/desktop; phones get it inside the sheet */}
+      <div className="replay-bar">
+        <ReplayControl variant="floating" {...replayProps} />
+      </div>
 
-      {/* 3D controls: camera presets and basemap layers */}
+      {/* 3D controls. Phones: camera presets plus one tools button that opens a popover; desktop: everything visible. */}
       {viewMode === '3d' && (
-        <div className="absolute z-30 right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 pointer-events-none">
+        <div className="dock">
           <div className={`${glass} pointer-events-auto flex flex-col gap-1 p-1 rounded-2xl`}>
             {([
               ['city', 'มุมเมือง', Building2],
@@ -500,8 +617,13 @@ export default function Dashboard() {
                 <Icon className="size-[18px]" />
               </button>
             ))}
+            <span className="md:hidden mx-2 my-0.5 h-px bg-white/10" />
+            <button title="เลเยอร์และเครื่องมือ" aria-label="เลเยอร์และเครื่องมือ" aria-expanded={dockMore} onClick={() => setDockMore((v) => !v)}
+              className={`md:hidden grid place-items-center size-10 rounded-xl transition ${dockMore ? 'bg-white/15 text-white' : 'text-zinc-300 hover:bg-white/10'}`}>
+              <Layers className="size-[18px]" />
+            </button>
           </div>
-          <div className={`${glass} pointer-events-auto flex flex-col gap-1 p-1 rounded-2xl`}>
+          <div className={`dock-more glass pointer-events-auto flex flex-col gap-1 p-1 rounded-2xl max-md:flex-row max-md:items-center ${dockMore ? '' : 'max-md:hidden'}`}>
             {([
               ['canals', 'คลอง', Waves],
               ['roads', 'ถนน', Route],
@@ -513,8 +635,7 @@ export default function Dashboard() {
                 <Icon className="size-[18px]" />
               </button>
             ))}
-          </div>
-          <div className={`${glass} pointer-events-auto p-1 rounded-2xl`}>
+            <span className="mx-2 my-0.5 h-px bg-white/10 max-md:mx-0.5 max-md:my-1.5 max-md:h-auto max-md:w-px max-md:self-stretch" />
             <button title="โหมดสนุก" aria-label="โหมดสนุก" aria-pressed={fun} onClick={() => setFun((f) => !f)}
               className={`grid place-items-center size-10 rounded-xl transition ${fun ? 'bg-amber-400 text-zinc-950' : 'text-zinc-300 hover:bg-white/10'}`}>
               <Sailboat className="size-[18px]" />
@@ -539,14 +660,15 @@ export default function Dashboard() {
         aria-label="ข้อมูลระดับน้ำ"
         data-snap={sheet}
         data-dragging={drag != null}
-        style={{ '--drag': `${drag ?? 0}px` } as React.CSSProperties}
+        style={{ '--drag': `${drag ?? 0}px`, '--tint': tint } as React.CSSProperties}
         className="panel glass"
       >
+        <div ref={topRef} className="shrink-0">
         {/* Handle (mobile) */}
         <div role="button" tabIndex={0} aria-label="ขยายหรือย่อแผง" onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp}
           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSheet(SNAPS[(SNAPS.indexOf(sheet) + 1) % 3])}
-          className="md:hidden touch-none shrink-0 grid place-items-center h-9 cursor-grab">
-          <span className="h-1 w-10 rounded-full bg-white/25" />
+          className="md:hidden touch-none shrink-0 grid place-items-center h-8 cursor-grab">
+          <span className="h-1.5 w-11 rounded-full bg-white/25" />
         </div>
 
         {/* Summary block, visible when peeking */}
@@ -561,27 +683,37 @@ export default function Dashboard() {
               <PanelLeftClose className="size-4" />
             </button>
           </div>
-          <h1 className="text-xl md:text-2xl font-semibold leading-snug">
+          <h1 className="text-lg md:text-2xl font-semibold leading-snug">
             {replaySnap ? 'ตอนนั้นน้ำ' : 'ตอนนี้น้ำ'} <span className={STATUS[overall].text}>{loading && !stations.length ? '...' : headline}</span>
           </h1>
+          {loadError && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-red-300">
+              <TriangleAlert className="size-3.5 shrink-0" /> โหลดข้อมูลไม่สำเร็จ
+              <button onClick={fetchData} className="underline underline-offset-2 hover:text-white">ลองใหม่</button>
+            </p>
+          )}
           {feedAgeMin > 30 && (
             <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-300">
               <TriangleAlert className="size-3.5 shrink-0" /> ข้อมูลล่าสุดเมื่อ {time} น. แหล่งข้อมูลอาจล่าช้า
             </p>
           )}
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-2 md:mt-3 grid grid-cols-3 gap-2">
             {summary.map(([k, label, n]) => {
               const on = filter === k;
               const glow = k === 'critical' && n > 0 ? 'shadow-[0_0_28px_-4px_rgba(255,93,93,0.55)]' : '';
               return (
                 <button key={k} onClick={() => goFilter(k)} aria-pressed={on}
-                  className={`rounded-2xl px-3 py-2.5 text-left ring-1 transition ${glow} ${on ? SUMMARY[k].on : 'bg-white/[0.03] ring-white/10 hover:bg-white/[0.07]'}`}>
-                  <div className={`text-2xl font-semibold tabular-nums leading-none ${SUMMARY[k].text}`}>{n}</div>
-                  <div className="mt-1.5 text-xs text-zinc-300">{label}</div>
+                  className={`flex items-baseline gap-2 md:block rounded-xl md:rounded-2xl px-3 py-1.5 md:py-2.5 text-left ring-1 transition active:scale-[0.98] ${glow} ${on ? SUMMARY[k].on : 'bg-white/[0.03] ring-white/10 hover:bg-white/[0.07]'}`}>
+                  <div className={`text-xl md:text-2xl font-semibold tabular-nums leading-none ${SUMMARY[k].text}`}>{n}</div>
+                  <div className="md:mt-1.5 text-xs text-zinc-300">{label}</div>
                 </button>
               );
             })}
           </div>
+        </div>
+
+        <div className="md:hidden shrink-0">
+          <ReplayControl variant="sheet" {...replayProps} />
         </div>
 
         <div role="tablist" className="shrink-0 px-4 md:px-5 pb-2 flex gap-1 border-b border-white/10">
@@ -589,6 +721,8 @@ export default function Dashboard() {
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); expand(); }}
               className={`flex-1 py-2 rounded-xl text-sm transition ${tab === t ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:text-white'}`}>{l}</button>
           ))}
+        </div>
+
         </div>
 
         {/* Scrollable body */}
@@ -667,8 +801,9 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="mt-3"><Gauge pct={pct} k={k} /></div>
-                        <div className="mt-1.5 flex justify-between text-[11px] text-zinc-400 tabular-nums">
+                        <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400 tabular-nums">
                           <span>น้ำ {st.waterLevel} ม.</span>
+                          <Spark id={String(st.id)} history={history} at={replay} color={COLORS[k]} />
                           <span>ตลิ่ง {st.bankHeight} ม.</span>
                         </div>
                       </button>
@@ -768,7 +903,7 @@ export default function Dashboard() {
       </aside>
 
       {toast && (
-        <div role="status" className="absolute z-40 left-1/2 -translate-x-1/2 top-32 rounded-full bg-zinc-100 text-zinc-900 text-sm font-medium px-4 py-2 shadow-xl max-w-[90vw] text-center">
+        <div role="status" className="toast rounded-full bg-zinc-100 text-zinc-900 text-sm font-medium px-4 py-2 shadow-xl max-w-[90vw] text-center">
           {toast}
         </div>
       )}

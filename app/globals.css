@@ -185,7 +185,7 @@ body {
   transition: none;
 }
 .panel[data-snap='peek'] {
-  --sheet-y: calc(100% - 13.5rem - env(safe-area-inset-bottom, 0px));
+  --sheet-y: calc(100% - var(--peek-h, 13.5rem) - env(safe-area-inset-bottom, 0px));
 }
 .panel[data-snap='half'] {
   --sheet-y: calc(100% - 55vh);
@@ -264,6 +264,24 @@ body {
   .leaflet-popup-content {
     min-width: 0;
     max-width: calc(100vw - 96px);
+  }
+  /* Phones get the history slider inside the sheet */
+  .replay-bar {
+    display: none;
+  }
+  /* 3D clutter control: smaller cards and vessels */
+  .flood-label-card {
+    padding: 4px 8px;
+  }
+  .fl-name {
+    font-size: 11px;
+  }
+  .fl-meta {
+    font-size: 10px;
+  }
+  .fun-icon {
+    width: 36px;
+    height: 30px;
   }
 }
 /* Short landscape phones: keep the sidebar usable */
@@ -467,4 +485,60 @@ body {
   border-radius: 9999px;
   background: #4fd1c5;
   border: 3px solid #e8f1ef;
+}
+
+/* ---------- 3D tools dock ---------- */
+.dock {
+  position: absolute;
+  z-index: 30;
+  right: 12px;
+  /* phones: tucked under the two header rows, clear of the bottom sheet */
+  top: calc(env(safe-area-inset-top, 0px) + 112px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .dock {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--peek-h, 13.5rem) + env(safe-area-inset-bottom, 0px) + 14px);
+  max-width: 90vw;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  color: #18181b;
+  background: #f4f4f5;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+@media (min-width: 768px) {
+  .toast {
+    bottom: 28px;
+  }
+}
+
+/* ---------- Small helpers ---------- */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+button {
+  touch-action: manipulation;
+}
+html {
+  -webkit-text-size-adjust: 100%;
 }
