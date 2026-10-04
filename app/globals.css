@@ -542,3 +542,39 @@ button {
 html {
   -webkit-text-size-adjust: 100%;
 }
+
+/* ---------- Fun-mode legend: sits above the history bar, never on top of it ---------- */
+.fun-legend {
+  position: absolute;
+  z-index: 30;
+  right: 76px;
+  bottom: 92px;
+  display: none;
+}
+@media (min-width: 768px) {
+  .fun-legend {
+    display: flex;
+  }
+}
+
+/* ---------- Phones: kept LAST so these win over the base rules defined above ---------- */
+@media (max-width: 767.98px) {
+  /* the history slider lives inside the bottom sheet on phones */
+  .replay-bar {
+    display: none;
+  }
+  /* less clutter in 3D */
+  .flood-label-card {
+    padding: 4px 8px;
+  }
+  .fl-name {
+    font-size: 11px;
+  }
+  .fl-meta {
+    font-size: 10px;
+  }
+  .fun-icon {
+    width: 36px;
+    height: 30px;
+  }
+}

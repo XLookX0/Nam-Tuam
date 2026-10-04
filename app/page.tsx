@@ -645,7 +645,7 @@ export default function Dashboard() {
       )}
 
       {viewMode === '3d' && fun && (
-        <div className={`${glass} hidden md:flex absolute z-30 right-16 bottom-9 items-center gap-4 rounded-2xl px-4 py-2 text-xs text-zinc-200`}>
+        <div className={`fun-legend ${glass} items-center gap-4 rounded-2xl px-4 py-2 text-xs text-zinc-200`}>
           {([['duck', 'ปกติ'], ['boat', 'เฝ้าระวัง'], ['sub', 'วิกฤต']] as const).map(([k, label]) => (
             <span key={k} className="inline-flex items-center gap-1.5">
               <span className="block w-8 h-6 shrink-0" dangerouslySetInnerHTML={{ __html: funIconSvg(k) }} />
