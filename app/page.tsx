@@ -514,6 +514,18 @@ export default function Dashboard() {
 
   return (
     <main className="app text-zinc-100" data-panel={panelOpen ? 'open' : 'closed'} style={{ '--peek-h': `${peekH}px` } as React.CSSProperties}>
+      {/* 2D basemap colour grading: maps tile brightness onto a teal-navy gradient (dark navy land, teal roads, pale cyan labels) */}
+      <svg aria-hidden="true" width="0" height="0" style={{ position: 'absolute' }}>
+        <filter id="flood-tint" colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0" />
+          <feComponentTransfer>
+            <feFuncR type="table" tableValues="0.012 0.059 0.169 0.310 0.467 0.600 0.706 0.812 0.886 0.953" />
+            <feFuncG type="table" tableValues="0.035 0.176 0.373 0.518 0.667 0.773 0.851 0.914 0.965 1" />
+            <feFuncB type="table" tableValues="0.051 0.227 0.451 0.596 0.733 0.827 0.894 0.941 0.980 1" />
+          </feComponentTransfer>
+        </filter>
+      </svg>
+
       {/* Map: always in the background. Between md and lg it starts right of the sidebar so stations aren't centred underneath it. */}
       <div className="map-layer">
         <MapWrapper

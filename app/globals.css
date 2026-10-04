@@ -53,7 +53,7 @@ select option {
 }
 
 .leaflet-container {
-  background: #0a1a20;
+  background: #071a22;
   font-family: inherit;
 }
 
@@ -248,9 +248,10 @@ body {
   }
 }
 
-/* Lift the very dark basemap so roads and labels are readable (markers and popups are unaffected) */
+/* 2D basemap theme: the neutral dark tiles are re-coloured through a teal-navy gradient map (SVG filter #flood-tint,
+   defined in page.tsx). Markers and popups are separate panes and stay untouched. */
 .map-layer .leaflet-tile-pane {
-  filter: brightness(1.6) contrast(0.9) saturate(1.15);
+  filter: url(#flood-tint);
 }
 
 /* ---------- Phones ---------- */
@@ -301,34 +302,39 @@ body {
   background: #071219;
 }
 .maplibregl-popup-content {
-  background: #0c1f26;
-  color: #e8f1ef;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  padding: 12px 14px;
-  font-family: inherit;
+  background: #0c1f26 !important;
+  color: #e8f1ef !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
+  padding: 12px 14px !important;
+  font-family: inherit !important;
 }
 .maplibregl-popup-close-button {
-  color: #9fb8bf;
+  color: #9fb8bf !important;
   font-size: 18px;
   padding: 2px 8px;
+  background: transparent !important;
+}
+.maplibregl-popup-close-button:hover {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 .maplibregl-popup-anchor-top .maplibregl-popup-tip,
 .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
 .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
-  border-bottom-color: #0c1f26;
+  border-bottom-color: #0c1f26 !important;
 }
 .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
 .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
 .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
-  border-top-color: #0c1f26;
+  border-top-color: #0c1f26 !important;
 }
 .maplibregl-popup-anchor-left .maplibregl-popup-tip {
-  border-right-color: #0c1f26;
+  border-right-color: #0c1f26 !important;
 }
 .maplibregl-popup-anchor-right .maplibregl-popup-tip {
-  border-left-color: #0c1f26;
+  border-left-color: #0c1f26 !important;
 }
 .maplibregl-ctrl-attrib {
   background: rgba(7, 18, 25, 0.7) !important;
