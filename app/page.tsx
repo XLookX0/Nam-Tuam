@@ -1,235 +1,56 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import MapWrapper from '@/components/MapWrapper';
+import { ArrowDownRight, LocateFixed, Search, Share2, TriangleAlert, TrendingUp, Waves, X } from 'lucide-react';
 import TideChart from '@/components/TideChart';
-import { funIconSvg } from '@/lib/funIcons';
+import HeroScene from '@/components/home/HeroScene';
+import SiteNav from '@/components/home/SiteNav';
+import ReplayBar from '@/components/home/ReplayBar';
+import MapStage from '@/components/home/MapStage';
+import { TrendLabel } from '@/components/home/StationCard';
+import { AreaId, Filter, HistoryChart, MyArea, Overview, SectionHead, Sort, StationsSection } from '@/components/home/Sections';
 import { Snapshot, applySnapshot, sixHourChange } from '@/lib/history';
-import { Station, ColorBy, CameraMode, MapLayers, COLORS, isStale, haversineKm, fmtTime, fmtChange } from '@/lib/station';
-import { History, Play, Pause, Layers, Droplets, Search, Waves, Sailboat, PanelLeftClose, PanelLeftOpen, Building, Building2, Compass, Route, Map as MapIcon, RefreshCw, ArrowUp, ArrowDown, Minus, Share2, LocateFixed, X, TriangleAlert } from 'lucide-react';
+import { Station, ColorBy, CameraMode, MapLayers, isStale, haversineKm, fmtTime } from '@/lib/station';
+import { STATUS, card, glass, kOf } from '@/lib/ui';
 
-type Filter = 'all' | 'rising' | 'falling' | 'warning' | 'critical' | 'stale';
-type Sort = 'capacity' | 'change' | 'level' | 'name' | 'updated';
-type Tab = 'stations' | 'overview' | 'tide';
-type Snap = 'peek' | 'half' | 'full';
-
-const STATUS = {
-  critical: { label: 'วิกฤต', bar: 'bg-red-500', text: 'text-red-400', chip: 'bg-red-500/15 text-red-300' },
-  warning: { label: 'เฝ้าระวัง', bar: 'bg-amber-400', text: 'text-amber-300', chip: 'bg-amber-400/15 text-amber-200' },
-  normal: { label: 'ปกติ', bar: 'bg-emerald-400', text: 'text-emerald-300', chip: 'bg-emerald-400/15 text-emerald-200' },
-  stale: { label: 'ไม่ส่งค่า', bar: 'bg-zinc-500', text: 'text-zinc-300', chip: 'bg-white/10 text-zinc-300' },
-} as const;
-type Key = keyof typeof STATUS;
-const kOf = (s: Station): Key => (isStale(s) ? 'stale' : s.status === 'critical' || s.status === 'warning' ? s.status : 'normal');
-
-const TREND = {
-  rising: { label: 'กำลังขึ้น', Icon: ArrowUp, text: 'text-orange-400', bg: 'bg-orange-400' },
-  falling: { label: 'กำลังลด', Icon: ArrowDown, text: 'text-cyan-300', bg: 'bg-cyan-300' },
-  stable: { label: 'ทรงตัว', Icon: Minus, text: 'text-zinc-300', bg: 'bg-zinc-400' },
-} as const;
-const tOf = (s: Station) => TREND[s.trend] ?? TREND.stable;
-
-// Glass surfaces
-const glass = 'glass';
-const sub = 'rounded-2xl bg-white/[0.04] ring-1 ring-white/10';
-const iconBtn = 'grid place-items-center size-10 md:size-9 rounded-xl text-zinc-300 hover:bg-white/10 active:bg-white/15 transition shrink-0';
-
-// Sheet geometry lives in globals.css (.panel[data-snap]).
-const SNAPS: Snap[] = ['peek', 'half', 'full'];
-
-const SUMMARY: Record<'all' | 'warning' | 'critical', { text: string; on: string }> = {
-  all: { text: 'text-cyan-300', on: 'bg-cyan-400/10 ring-cyan-400/50' },
-  warning: { text: 'text-amber-300', on: 'bg-amber-400/10 ring-amber-400/50' },
-  critical: { text: 'text-red-400', on: 'bg-red-500/10 ring-red-500/50' },
+const shortName = (n: string) => n.replace(/\s*\(.*\)/, '').replace(/^สถานี(วัดน้ำ)?/, '').trim() || n;
+const toMin = (t: string) => {
+  const m = t.match(/(\d{1,2})[:.](\d{2})/);
+  return m ? +m[1] * 60 + +m[2] : NaN;
 };
+const bangkokMinutes = () =>
+  toMin(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Asia/Bangkok' }).format(new Date()));
 
-function Gauge({ pct, k }: { pct: number; k: Key }) {
-  return (
-    <div className="relative h-2 rounded-full bg-white/10 overflow-hidden">
-      <div className={`h-full rounded-full ${STATUS[k].bar} transition-[width] duration-700`} style={{ width: `${Math.min(pct, 100)}%` }} />
-      {/* thresholds: 70% watch, 90% critical */}
-      <span className="absolute inset-y-0 left-[70%] w-px bg-white/30" />
-      <span className="absolute inset-y-0 left-[90%] w-px bg-white/30" />
-    </div>
-  );
-}
-
-function TrendLabel({ st, showChange = true }: { st: Station; showChange?: boolean }) {
-  const t = tOf(st);
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs ${t.text}`}>
-      <t.Icon className="size-3" />
-      {t.label}
-      {showChange && st.change6h != null && <span className="text-zinc-300 tabular-nums">{fmtChange(st.change6h)}</span>}
-    </span>
-  );
-}
-
-/* Canal cross-section: water rises toward the bank top (100%) */
-function CanalGauge({ pct, k }: { pct: number; k: Key }) {
-  const h = (Math.min(pct, 100) / 100) * 200;
-  const y = 230 - h;
-  const color = k === 'critical' ? '#ff5d5d' : k === 'warning' ? '#f5b544' : '#4fd1c5';
-  return (
-    <svg viewBox="0 0 400 260" className="w-full h-auto" role="img" aria-label={`ระดับน้ำเฉลี่ย ${pct.toFixed(0)}% ของตลิ่ง`}>
-      <defs>
-        <clipPath id="canal"><rect x="70" y="30" width="260" height="200" /></clipPath>
-        <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={color} stopOpacity="0.85" />
-          <stop offset="1" stopColor={color} stopOpacity="0.25" />
-        </linearGradient>
-      </defs>
-      <rect x="0" y="30" width="70" height="230" fill="#14323d" />
-      <rect x="330" y="30" width="70" height="230" fill="#14323d" />
-      <rect x="70" y="230" width="260" height="30" fill="#10282f" />
-      <g clipPath="url(#canal)">
-        <g style={{ transform: `translateY(${y}px)`, transition: 'transform 1s ease' }}>
-          <g className="wave">
-            <path d="M-140 6 Q-105 -6 -70 6 T0 6 T70 6 T140 6 T210 6 T280 6 T350 6 T420 6 T490 6 V300 H-140 Z" fill="url(#water)" />
-          </g>
-        </g>
-      </g>
-      <line x1="70" y1="30" x2="330" y2="30" stroke="#9fb8bf" strokeDasharray="5 5" strokeOpacity="0.6" />
-      <text x="338" y="26" fill="#9fb8bf" fontSize="11">ขอบตลิ่ง</text>
-    </svg>
-  );
-}
-
-/** The 24h history control. Floating bar on tablet/desktop; flat row inside the bottom sheet on phones. */
-function ReplayControl({ variant, history, replay, playing, snapT, onLive, onScrub, onPlay }: {
-  variant: 'floating' | 'sheet';
-  history: Snapshot[];
-  replay: number | null;
-  playing: boolean;
-  snapT: number | null;
-  onLive: () => void;
-  onScrub: (v: number) => void;
-  onPlay: () => void;
-}) {
-  const n = history.length;
-  const floating = variant === 'floating';
-  if (n < 2) {
-    return (
-      <div className={floating ? `${glass} pointer-events-auto rounded-2xl px-4 py-2.5 text-xs text-zinc-300 flex items-center gap-2` : 'px-4 pb-3 text-xs text-zinc-400 flex items-center gap-2'}>
-        <History className="size-4 text-zinc-400" />
-        ย้อนหลัง 24 ชม. กำลังเก็บข้อมูล ({n}/2 ครั้ง)
-      </div>
-    );
-  }
-  const value = replay ?? n - 1;
-  const label = snapT ? `${(Math.round(((Date.now() - snapT) / 3.6e6) * 10) / 10).toFixed(1)} ชม. ก่อน` : 'ปัจจุบัน';
-  const range = (
-    <input type="range" className="replay-range flex-1 min-w-0" aria-label="เลื่อนดูระดับน้ำย้อนหลัง"
-      min={0} max={n - 1} step={1} value={value}
-      style={{ '--p': `${(value / (n - 1)) * 100}%` } as React.CSSProperties}
-      onChange={(e) => onScrub(Number(e.target.value))} />
-  );
-  const play = (
-    <button onClick={onPlay} aria-label={playing ? 'หยุดเล่น' : 'เล่นย้อนหลัง'} title={playing ? 'หยุดเล่น' : 'เล่นย้อนหลัง'}
-      className={`grid place-items-center ${floating ? 'size-10' : 'size-9'} rounded-full bg-cyan-400 text-zinc-950 hover:brightness-110 active:scale-95 transition shrink-0`}>
-      {playing ? <Pause className="size-4" /> : <Play className="size-4 translate-x-px" />}
-    </button>
-  );
-
-  if (floating) {
-    return (
-      <div className={`${glass} pointer-events-auto flex items-center gap-3 rounded-2xl pl-3 pr-2 py-2 w-full max-w-2xl`}>
-        <button onClick={onLive} disabled={replay == null} aria-label="กลับไปปัจจุบัน" title="กลับไปปัจจุบัน"
-          className={`${iconBtn} ${replay == null ? 'opacity-60' : 'bg-cyan-400/15 text-cyan-300'}`}>
-          <History className="size-[18px]" />
-        </button>
-        <div className="min-w-0 shrink-0 w-[92px] leading-tight">
-          <div className="text-[11px] text-zinc-400">ย้อนหลัง 24 ชม.</div>
-          <div className={`text-sm font-medium truncate ${snapT ? 'text-cyan-300' : 'text-zinc-100'}`}>{label}</div>
-        </div>
-        {range}
-        {play}
-      </div>
-    );
-  }
-
-  return (
-    <div className="px-4 pb-2">
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="flex items-center gap-1.5 text-zinc-400"><History className="size-3.5" /> ย้อนหลัง 24 ชม.</span>
-        {replay == null ? (
-          <span className="flex items-center gap-1.5 text-zinc-200"><span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" /> สด</span>
-        ) : (
-          <button onClick={onLive} className="rounded-full bg-cyan-400/15 px-2.5 py-0.5 font-medium text-cyan-300 active:bg-cyan-400/25">
-            {label} · กลับสด
-          </button>
-        )}
-      </div>
-      <div className="mt-1 flex items-center gap-3">
-        {play}
-        {range}
-      </div>
-    </div>
-  );
-}
-
-/** Tiny 24 h capacity trend for a station card; the dot marks the moment being shown. */
-function Spark({ id, history, at, color }: { id: string; history: Snapshot[]; at: number | null; color: string }) {
-  const pts = history.map((x) => x.d[id]?.[1]);
-  const vals = pts.filter((v): v is number => v != null);
-  if (vals.length < 2) return <span className="w-24" />;
-  const lo = Math.min(...vals);
-  const span = Math.max(Math.max(...vals) - lo, 6);
-  const W = 96, Hh = 22, n = pts.length;
-  const x = (i: number) => (i / (n - 1)) * W;
-  const y = (v: number) => Hh - 3 - ((v - lo) / span) * (Hh - 6);
-  let d = '';
-  pts.forEach((v, i) => {
-    if (v == null) return;
-    d += `${d && pts[i - 1] != null ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`;
-  });
-  const cur = at ?? n - 1;
-  const cv = pts[cur];
-  return (
-    <svg viewBox={`0 0 ${W} ${Hh}`} className="h-[22px] w-24 shrink-0" aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-      {cv != null && <circle cx={x(cur)} cy={y(cv)} r="2.6" fill={color} stroke="#071219" strokeWidth="1.2" />}
-    </svg>
-  );
-}
+const DIR = {
+  rising: { word: 'กำลังขึ้น', cls: 'text-orange-300 decoration-orange-300/80' },
+  falling: { word: 'กำลังลด', cls: 'text-cyan-300 decoration-cyan-300/80' },
+  stable: { word: 'ทรงตัว', cls: 'text-zinc-200 decoration-zinc-300/60' },
+} as const;
 
 export default function Dashboard() {
   const [rawStations, setStations] = useState<Station[]>([]);
   const [tides, setTides] = useState<any>(null);
   const [lastUpdated, setLastUpdated] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
   const [focusKey, setFocusKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [heroQ, setHeroQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('capacity');
+  const [area, setArea] = useState<AreaId>('mueang');
+  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const [toast, setToast] = useState('');
+
   const [colorBy, setColorBy] = useState<ColorBy>('level');
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
   const [fun, setFun] = useState(false);
-  const [dockMore, setDockMore] = useState(false);
-
-  // The collapsed sheet is exactly as tall as its top block (handle, summary, history slider, tabs), whatever it contains.
-  const topRef = useRef<HTMLDivElement>(null);
-  const [peekH, setPeekH] = useState(232);
-  useEffect(() => {
-    const el = topRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setPeekH(Math.ceil(el.getBoundingClientRect().height) + 6));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [fullscreen, setFullscreen] = useState(false);
   const [cam, setCam] = useState<{ mode: CameraMode | null; key: number }>({ mode: null, key: 0 });
   const [layers, setLayers] = useState<MapLayers>({ canals: true, roads: true, buildings: true });
-  const [loadError, setLoadError] = useState(false);
-  const [userPos, setUserPos] = useState<[number, number] | null>(null);
-  const [toast, setToast] = useState('');
-  const [tab, setTab] = useState<Tab>('stations');
-  const [sheet, setSheet] = useState<Snap>('peek');
   const pendingId = useRef<string | null>(null);
-  const [drag, setDrag] = useState<number | null>(null);
-  const gesture = useRef({ y0: 0, y: 0, t: 0, v: 0 });
 
   // ---- 24h history / replay ----
   const [history, setHistory] = useState<Snapshot[]>([]);
@@ -255,7 +76,7 @@ export default function Dashboard() {
     };
   }, []);
 
-  // Everything below (map, list, counts) reads `stations`, so replaying history needs no other changes.
+  // Everything on the page reads `stations`, so replaying history needs no other changes.
   const stations = useMemo(() => {
     const n = history.length;
     if (replay != null && history[replay]) {
@@ -267,9 +88,7 @@ export default function Dashboard() {
       });
     }
     if (!n) return rawStations;
-    return rawStations.map((s) =>
-      s.change6h != null ? s : { ...s, change6h: sixHourChange(history, n - 1, String(s.id), Number(s.waterLevel)) }
-    );
+    return rawStations.map((s) => (s.change6h != null ? s : { ...s, change6h: sixHourChange(history, n - 1, String(s.id), Number(s.waterLevel)) }));
   }, [rawStations, history, replay]);
   const replaySnap = replay != null ? history[replay] ?? null : null;
 
@@ -313,7 +132,7 @@ export default function Dashboard() {
     const sp = new URLSearchParams(window.location.search);
     pendingId.current = sp.get('station');
     if (sp.get('view') === '3d') setViewMode('3d');
-    // Weak devices: start without 3D buildings (the heaviest layer); they can switch it on from the dock
+    // Weak devices: start without 3D buildings (the heaviest layer); they can switch it on from the map tools
     const nav = navigator as Navigator & { deviceMemory?: number };
     if ((nav.deviceMemory != null && nav.deviceMemory <= 2) || (nav.hardwareConcurrency != null && nav.hardwareConcurrency <= 2)) {
       setLayers((l) => ({ ...l, buildings: false }));
@@ -339,6 +158,22 @@ export default function Dashboard() {
     window.history.replaceState(null, '', u);
   }, [viewMode]);
 
+  // Fullscreen map: lock page scroll, Esc closes
+  useEffect(() => {
+    if (!fullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setFullscreen(false);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [fullscreen]);
+
+  const live = useMemo(() => stations.filter((s) => !isStale(s)), [stations]);
+  const selectedStation = useMemo(() => stations.find((s) => s.id === selectedId) ?? null, [stations, selectedId]);
+
   // Open a shared station link once data has arrived
   useEffect(() => {
     if (!pendingId.current || !stations.length) return;
@@ -347,11 +182,9 @@ export default function Dashboard() {
     if (st) {
       setSelectedId(st.id);
       setFocusKey((k) => k + 1);
+      setTimeout(() => document.getElementById('map-stage')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400);
     }
   }, [stations]);
-
-  const live = useMemo(() => stations.filter((s) => !isStale(s)), [stations]);
-  const selectedStation = useMemo(() => stations.find((s) => s.id === selectedId) ?? null, [stations, selectedId]);
 
   const counts = useMemo(() => {
     const c = { critical: 0, warning: 0, normal: 0, stale: 0, rising: 0, falling: 0, stable: 0 };
@@ -365,14 +198,15 @@ export default function Dashboard() {
 
   const avg = live.length ? live.reduce((a, s) => a + (Number(s.capacityPercent) || 0), 0) / live.length : 0;
   const top = live.reduce<Station | null>((m, s) => (!m || Number(s.capacityPercent) > Number(m.capacityPercent) ? s : m), null);
-  const overall: Exclude<Key, 'stale'> = counts.critical ? 'critical' : counts.warning ? 'warning' : 'normal';
-  const headline = { critical: 'วิกฤตบางจุด', warning: 'ต้องเฝ้าระวัง', normal: 'ปกติ' }[overall];
+  const overall: 'critical' | 'warning' | 'normal' = counts.critical ? 'critical' : counts.warning ? 'warning' : 'normal';
+  const dir = counts.rising > counts.falling ? 'rising' : counts.falling > counts.rising ? 'falling' : 'stable';
 
   const movers = useMemo(() => {
     const hasDelta = live.some((s) => s.change6h != null);
     const d = (s: Station) => s.change6h ?? 0;
-    const rising = live.filter((s) => s.trend === 'rising').sort((a, b) => (hasDelta ? d(b) - d(a) : Number(b.capacityPercent) - Number(a.capacityPercent))).slice(0, 5);
-    const falling = live.filter((s) => s.trend === 'falling').sort((a, b) => (hasDelta ? d(a) - d(b) : Number(b.capacityPercent) - Number(a.capacityPercent))).slice(0, 5);
+    const byCap = (a: Station, b: Station) => Number(b.capacityPercent) - Number(a.capacityPercent);
+    const rising = live.filter((s) => s.trend === 'rising').sort((a, b) => (hasDelta ? d(b) - d(a) : byCap(a, b))).slice(0, 5);
+    const falling = live.filter((s) => s.trend === 'falling').sort((a, b) => (hasDelta ? d(a) - d(b) : byCap(a, b))).slice(0, 5);
     return { rising, falling, hasDelta };
   }, [live]);
 
@@ -395,25 +229,37 @@ export default function Dashboard() {
       });
   }, [stations, searchQuery, filter, sort]);
 
+  const suggestions = useMemo(() => {
+    const q = heroQ.trim().toLowerCase();
+    return q ? stations.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 5) : [];
+  }, [stations, heroQ]);
+
   const time = replaySnap ? fmtTime(new Date(replaySnap.t).toISOString()) : lastUpdated ? fmtTime(lastUpdated) : '...';
   const feedAgeMin = replaySnap ? 0 : lastUpdated ? (Date.now() - new Date(lastUpdated).getTime()) / 60000 : 0;
 
-  const expand = () => setSheet((s) => (s === 'peek' ? 'half' : s));
+  const peaks: { time: string; height: number }[] = tides?.peaks ?? [];
+  const nowMin = bangkokMinutes();
+  const nextPeak = peaks.find((p) => toMin(p.time) > nowMin);
+  const nextHigh = peaks.length ? { ...(nextPeak ?? peaks[0]), tomorrow: !nextPeak } : null;
 
-  // Selecting a station drops the sheet so the map and popup are visible
-  const pick = (st: Station) => {
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: id === 'map-stage' ? 'center' : 'start' });
+
+  // Choosing a station from anywhere on the page selects it and brings the map to it
+  const select = (st: Station) => {
     setSelectedId(st.id);
     setFocusKey((k) => k + 1);
-    setSheet('peek');
   };
-
+  const pick = (st: Station) => {
+    select(st);
+    setHeroQ('');
+    if (!fullscreen) scrollTo('map-stage');
+  };
   const goFilter = (f: Filter) => {
     setFilter(f);
-    setTab('stations');
-    expand();
+    scrollTo('stations');
   };
 
-  const locate = () => {
+  const locate = (target: 'area' | 'map') => {
     if (!navigator.geolocation) return say('เบราว์เซอร์นี้ไม่รองรับการหาตำแหน่ง');
     say('กำลังหาตำแหน่งของคุณ...');
     navigator.geolocation.getCurrentPosition(
@@ -422,12 +268,22 @@ export default function Dashboard() {
         const ranked = live.map((s) => ({ s, km: haversineKm(pos, [s.lat, s.lng]) })).sort((a, b) => a.km - b.km)[0];
         if (!ranked || ranked.km > 30) return say('ตำแหน่งของคุณอยู่นอกพื้นที่สมุทรสงคราม');
         setUserPos(pos);
-        pick(ranked.s);
         say(`สถานีใกล้คุณที่สุด อยู่ห่าง ${ranked.km.toFixed(1)} กม.`);
+        if (target === 'map') select(ranked.s);
+        else {
+          setArea('near');
+          scrollTo('my-area');
+        }
       },
       () => say('เปิดตำแหน่งไม่ได้ ลองอนุญาตการเข้าถึงตำแหน่งในเบราว์เซอร์'),
       { timeout: 8000 }
     );
+  };
+  const nearMe = () => {
+    if (userPos) {
+      setArea('near');
+      scrollTo('my-area');
+    } else locate('area');
   };
 
   const share = async (st?: Station) => {
@@ -435,7 +291,7 @@ export default function Dashboard() {
     url.hash = '';
     if (st) url.searchParams.set('station', String(st.id));
     else url.searchParams.delete('station');
-    const text = st ? `${st.name} น้ำ ${st.capacityPercent}% ของตลิ่ง` : `สมุทรสงครามตอนนี้น้ำ${headline}`;
+    const text = st ? `${st.name} น้ำ ${st.capacityPercent}% ของตลิ่ง` : `สมุทรสงครามตอนนี้ น้ำ${DIR[dir].word}`;
     try {
       if (navigator.share) await navigator.share({ title: document.title, text, url: url.toString() });
       else {
@@ -447,46 +303,11 @@ export default function Dashboard() {
     }
   };
 
-  // Sheet handle: the sheet follows the finger, then snaps to the nearest position (velocity-aware). A tap cycles.
-  const visibleFor = (snap: Snap) => {
-    const H = window.innerHeight;
-    return snap === 'peek' ? peekH : snap === 'half' ? H * 0.55 : H * 0.9;
-  };
-  const onHandleDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    gesture.current = { y0: e.clientY, y: e.clientY, t: performance.now(), v: 0 };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDrag(0);
-  };
-  const onHandleMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (drag == null) return;
-    const g = gesture.current;
-    const now = performance.now();
-    g.v = (e.clientY - g.y) / Math.max(now - g.t, 1); // px per ms, + is downward
-    g.y = e.clientY;
-    g.t = now;
-    const here = visibleFor(sheet);
-    const lo = -(visibleFor('full') - here); // can't pull past fully open
-    const hi = here - visibleFor('peek'); // can't push past resting
-    setDrag(Math.min(hi, Math.max(lo, e.clientY - g.y0)));
-  };
-  const onHandleUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (drag == null) return;
-    const dy = e.clientY - gesture.current.y0;
-    const v = gesture.current.v;
-    setDrag(null);
-    if (Math.abs(dy) < 8) {
-      setSheet(SNAPS[(SNAPS.indexOf(sheet) + 1) % 3]);
-      return;
-    }
-    const projected = visibleFor(sheet) - dy - v * 180;
-    const nearest = SNAPS.reduce((a, b) => (Math.abs(visibleFor(b) - projected) < Math.abs(visibleFor(a) - projected) ? b : a));
-    setSheet(nearest);
+  const open3D = () => {
+    setViewMode('3d');
+    setFullscreen(true);
   };
 
-  const onLive = () => {
-    setPlaying(false);
-    setReplay(null);
-  };
   const onScrub = (v: number) => {
     setPlaying(false);
     setReplay(v >= history.length - 1 ? null : v);
@@ -496,417 +317,194 @@ export default function Dashboard() {
     if (replay == null || replay >= history.length - 1) setReplay(0);
     setPlaying(true);
   };
-  const replayProps = { history, replay, playing, snapT: replaySnap ? replaySnap.t : null, onLive, onScrub, onPlay };
-  const tint = overall === 'critical' ? 'rgba(255,93,93,0.16)' : overall === 'warning' ? 'rgba(245,181,68,0.13)' : 'rgba(79,209,197,0.11)';
+  const onLive = () => {
+    setPlaying(false);
+    setReplay(null);
+  };
 
-  const summary: ['all' | 'warning' | 'critical', string, number][] = [
-    ['all', 'ทั้งหมด', stations.length],
-    ['warning', 'เฝ้าระวัง', counts.warning],
-    ['critical', 'วิกฤต', counts.critical],
-  ];
-  const pills: [Filter, string, number][] = [
-    ['rising', 'กำลังขึ้น', counts.rising],
-    ['falling', 'กำลังลด', counts.falling],
-    ['stale', 'ไม่ส่งค่า', counts.stale],
-  ];
-  const tabs: [Tab, string][] = [['stations', 'สถานี'], ['overview', 'ภาพรวม'], ['tide', 'น้ำขึ้นน้ำลง']];
-  const trendTotal = counts.rising + counts.falling + counts.stable || 1;
+  const subtitle =
+    live.length === 0
+      ? loading
+        ? 'กำลังโหลดข้อมูลล่าสุด...'
+        : 'ยังไม่มีสถานีที่ส่งค่าในตอนนี้'
+      : counts.critical || counts.warning
+        ? `${counts.critical} จุดวัดถึงระดับวิกฤต และอีก ${counts.warning} จุดเกินระดับเฝ้าระวัง จากทั้งหมด ${live.length} จุดที่ส่งค่า`
+        : `ทุกจุดวัดอยู่ในระดับปกติ จากทั้งหมด ${live.length} จุดที่ส่งค่า`;
+
+  const selectedCard = selectedStation && (
+    <div className={`${fullscreen ? glass : card} flex items-center gap-4 rounded-2xl p-4`}>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{selectedStation.name}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs tabular-nums text-zinc-300">
+          <span>น้ำ {selectedStation.waterLevel} / ตลิ่ง {selectedStation.bankHeight} ม.</span>
+          <TrendLabel st={selectedStation} />
+        </div>
+      </div>
+      <div className={`text-2xl font-bold tabular-nums ${STATUS[kOf(selectedStation)].text}`}>{selectedStation.capacityPercent}%</div>
+      <button onClick={() => share(selectedStation)} aria-label="แชร์สถานีนี้" className="grid size-10 place-items-center rounded-xl bg-white/5 hover:bg-white/10"><Share2 className="size-4" /></button>
+      <button onClick={() => setSelectedId(null)} aria-label="ปิด" className="grid size-10 place-items-center rounded-xl bg-white/5 hover:bg-white/10"><X className="size-4" /></button>
+    </div>
+  );
+
+  const chip = 'inline-flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-2 text-sm text-zinc-100 ring-1 ring-white/10';
 
   return (
-    <main className="app text-zinc-100" data-panel={panelOpen ? 'open' : 'closed'} style={{ '--peek-h': `${peekH}px` } as React.CSSProperties}>
+    <main id="top" className="site">
+      {!fullscreen && <SiteNav onNear={nearMe} onOpen3D={open3D} onShare={() => share()} />}
 
-      {/* Map: always in the background. Between md and lg it starts right of the sidebar so stations aren't centred underneath it. */}
-      <div className="map-layer">
-        <MapWrapper
-          mode={viewMode}
-          stations={list}
-          selectedStation={selectedStation}
-          focusKey={focusKey}
-          colorBy={colorBy}
-          userPos={userPos}
-          onSelect={pick}
-          camera={cam}
-          fun={fun}
-          layers={layers}
-          onCameraEnd={() => setCam((c) => ({ ...c, mode: null }))}
-          onUnsupported={() => {
-            setViewMode('2d');
-            say('เปิดแผนที่ 3 มิติไม่ได้ในอุปกรณ์นี้ จึงกลับไปแบบ 2 มิติ');
-          }}
-        />
-      </div>
-
-      {/* Floating header */}
-      <div className="hud">
-        <header className={`${glass} pointer-events-auto flex items-center gap-1.5 h-12 pl-3 pr-1.5 rounded-2xl w-full md:w-auto shadow-lg shadow-black/30`}>
-          <div className="flex items-center gap-2.5 min-w-0 flex-1 md:hidden">
-            <span className="grid place-items-center size-8 rounded-xl bg-cyan-400/15 text-cyan-300 shrink-0"><Droplets className="size-4" /></span>
-            <div className="min-w-0 leading-tight">
-              <div className="font-semibold text-sm truncate">สมุทรสงคราม</div>
-              <div className="flex items-center gap-1.5 text-[11px] text-zinc-300">
-                <span className={`size-1.5 rounded-full ${replaySnap ? 'bg-cyan-400' : feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
-                {replaySnap ? 'ย้อนดู' : 'อัปเดต'} {time} น.
+      {/* ------------------------------ Hero ------------------------------ */}
+      <header className="relative overflow-hidden pb-6 pt-28 md:pt-36">
+        <div className="hero-glow" aria-hidden="true" />
+        <div className="relative mx-auto grid max-w-6xl gap-10 px-4 md:px-6 lg:grid-cols-[1.02fr_1fr] lg:items-center">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className={`${glass} inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full px-4 py-2 text-sm`}>
+                <span className="flex items-center gap-2">
+                  <span className={`size-2 rounded-full ${replaySnap ? 'bg-sky-300' : feedAgeMin > 30 ? 'bg-amber-400' : 'animate-pulse bg-emerald-400'}`} />
+                  {replaySnap ? 'ย้อนดูข้อมูล ณ' : 'ข้อมูลสด ล่าสุด'} <b className="font-semibold">{time} น.</b>
+                </span>
+                <span className="text-zinc-400">{live.length}/{stations.length} จุดส่งค่า</span>
               </div>
-            </div>
-          </div>
-          <span className="hidden md:flex items-center gap-2 pr-2 text-xs text-zinc-300">
-            <span className={`size-2 rounded-full ${replaySnap ? 'bg-cyan-400' : feedAgeMin > 30 ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
-            {replaySnap ? 'ย้อนดู' : 'อัปเดต'} {time} น.
-          </span>
-          <button onClick={locate} aria-label="ตำแหน่งของฉัน" className={iconBtn}><LocateFixed className="size-4" /></button>
-          <button onClick={() => share()} aria-label="แชร์หน้านี้" className={iconBtn}><Share2 className="size-4" /></button>
-          <button onClick={fetchData} aria-label="รีเฟรชข้อมูล" className={iconBtn}>
-            <RefreshCw className={`size-4 ${loading ? 'animate-spin text-cyan-300' : ''}`} />
-          </button>
-        </header>
-
-        <div className="flex items-center justify-between md:justify-end md:flex-wrap gap-2 max-w-full">
-          <div role="group" aria-label="โหมดแผนที่" className={`${glass} pointer-events-auto flex shrink-0 rounded-xl p-0.5 text-xs`}>
-            {(['2d', '3d'] as const).map((m) => (
-              <button key={m} onClick={() => setViewMode(m)} aria-pressed={viewMode === m}
-                className={`px-3 py-1.5 rounded-[10px] font-medium transition ${viewMode === m ? 'bg-cyan-400 text-zinc-950' : 'text-zinc-300 hover:text-white'}`}>
-                {m === '2d' ? '2 มิติ' : '3 มิติ'}
-              </button>
-            ))}
-          </div>
-          <div role="group" aria-label="สีของจุด" className={`${glass} pointer-events-auto flex shrink-0 rounded-xl p-0.5 text-xs`}>
-            {([['level', 'ระดับ', 'ตามระดับน้ำ'], ['trend', 'ทิศทาง', 'ตามทิศทาง']] as [ColorBy, string, string][]).map(([v, short, l]) => (
-              <button key={v} onClick={() => setColorBy(v)} aria-pressed={colorBy === v}
-                className={`px-3 py-1.5 rounded-[10px] transition ${colorBy === v ? 'bg-cyan-400 text-zinc-950 font-medium' : 'text-zinc-300 hover:text-white'}`}>
-                <span className="md:hidden">{short}</span><span className="hidden md:inline">{l}</span>
-              </button>
-            ))}
-          </div>
-          <div className={`${glass} hidden xl:flex items-center gap-3 whitespace-nowrap rounded-xl px-3 py-2 text-xs text-zinc-300`}>
-            {(colorBy === 'level'
-              ? [['#3ecf8e', 'ปกติ'], ['#f5b544', 'เฝ้าระวัง'], ['#ff5d5d', 'วิกฤต']]
-              : [['#ff7a59', 'ขึ้น'], ['#4fd1c5', 'ลด'], ['#7f9ca4', 'ทรงตัว']]
-            ).map(([c, l]) => (
-              <span key={l} className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ background: c }} />{l}</span>
-            ))}
-            <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full border-2 border-zinc-500" />ไม่ส่งค่า</span>
-            {viewMode === '3d' && <span className="hidden 2xl:inline text-zinc-300">แท่ง = น้ำ หลอดใส = ตลิ่ง</span>}
-          </div>
-        </div>
-      </div>
-
-      {/* Reopen the sidebar after hiding it (tablet / desktop) */}
-      {!panelOpen && (
-        <button onClick={() => setPanelOpen(true)} aria-label="แสดงแผงด้านข้าง" title="แสดงแผง"
-          className={`${glass} hidden md:grid absolute z-30 left-4 top-4 place-items-center size-12 rounded-2xl text-zinc-200 hover:bg-white/10 transition`}>
-          <PanelLeftOpen className="size-5" />
-        </button>
-      )}
-
-      {/* 24-hour history slider: floating on tablet/desktop; phones get it inside the sheet */}
-      <div className="replay-bar">
-        <ReplayControl variant="floating" {...replayProps} />
-      </div>
-
-      {/* 3D controls. Phones: camera presets plus one tools button that opens a popover; desktop: everything visible. */}
-      {viewMode === '3d' && (
-        <div className="dock">
-          <div className={`${glass} pointer-events-auto flex flex-col gap-1 p-1 rounded-2xl`}>
-            {([
-              ['city', 'มุมเมือง', Building2],
-              ['top', 'มองจากบน', MapIcon],
-              ['tour', 'สำรวจจุดวัด', Compass],
-            ] as [CameraMode, string, typeof Building2][]).map(([m, label, Icon]) => (
-              <button key={m} title={label} aria-label={label} aria-pressed={cam.mode === m}
-                onClick={() => { setCam((c) => ({ mode: m, key: c.key + 1 })); if (m === 'tour') setSheet('peek'); }}
-                className={`grid place-items-center size-10 rounded-xl transition ${cam.mode === m ? 'bg-cyan-400 text-zinc-950' : 'text-zinc-300 hover:bg-white/10'}`}>
-                <Icon className="size-[18px]" />
-              </button>
-            ))}
-            <span className="md:hidden mx-2 my-0.5 h-px bg-white/10" />
-            <button title="เลเยอร์และเครื่องมือ" aria-label="เลเยอร์และเครื่องมือ" aria-expanded={dockMore} onClick={() => setDockMore((v) => !v)}
-              className={`md:hidden grid place-items-center size-10 rounded-xl transition ${dockMore ? 'bg-white/15 text-white' : 'text-zinc-300 hover:bg-white/10'}`}>
-              <Layers className="size-[18px]" />
-            </button>
-          </div>
-          <div className={`dock-more glass pointer-events-auto flex flex-col gap-1 p-1 rounded-2xl max-md:flex-row max-md:items-center ${dockMore ? '' : 'max-md:hidden'}`}>
-            {([
-              ['canals', 'คลอง', Waves],
-              ['roads', 'ถนน', Route],
-              ['buildings', 'ตึก', Building],
-            ] as [keyof MapLayers, string, typeof Waves][]).map(([k, label, Icon]) => (
-              <button key={k} title={label} aria-label={label} aria-pressed={layers[k]}
-                onClick={() => setLayers((l) => ({ ...l, [k]: !l[k] }))}
-                className={`grid place-items-center size-10 rounded-xl transition ${layers[k] ? 'text-cyan-300 bg-cyan-400/15' : 'text-zinc-400 hover:bg-white/10'}`}>
-                <Icon className="size-[18px]" />
-              </button>
-            ))}
-            <span className="mx-2 my-0.5 h-px bg-white/10 max-md:mx-0.5 max-md:my-1.5 max-md:h-auto max-md:w-px max-md:self-stretch" />
-            <button title="โหมดสนุก" aria-label="โหมดสนุก" aria-pressed={fun} onClick={() => setFun((f) => !f)}
-              className={`grid place-items-center size-10 rounded-xl transition ${fun ? 'bg-amber-400 text-zinc-950' : 'text-zinc-300 hover:bg-white/10'}`}>
-              <Sailboat className="size-[18px]" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {viewMode === '3d' && fun && (
-        <div className={`fun-legend ${glass} items-center gap-4 rounded-2xl px-4 py-2 text-xs text-zinc-200`}>
-          {([['duck', 'ปกติ'], ['boat', 'เฝ้าระวัง'], ['sub', 'วิกฤต']] as const).map(([k, label]) => (
-            <span key={k} className="inline-flex items-center gap-1.5">
-              <span className="block w-8 h-6 shrink-0" dangerouslySetInnerHTML={{ __html: funIconSvg(k) }} />
-              {label}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Sidebar (md+) / bottom sheet (mobile) */}
-      <aside
-        aria-label="ข้อมูลระดับน้ำ"
-        data-snap={sheet}
-        data-dragging={drag != null}
-        style={{ '--drag': `${drag ?? 0}px`, '--tint': tint } as React.CSSProperties}
-        className="panel glass"
-      >
-        <div ref={topRef} className="shrink-0">
-        {/* Handle (mobile) */}
-        <div role="button" tabIndex={0} aria-label="ขยายหรือย่อแผง" onPointerDown={onHandleDown} onPointerMove={onHandleMove} onPointerUp={onHandleUp} onPointerCancel={onHandleUp}
-          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSheet(SNAPS[(SNAPS.indexOf(sheet) + 1) % 3])}
-          className="md:hidden touch-none shrink-0 grid place-items-center h-8 cursor-grab">
-          <span className="h-1.5 w-11 rounded-full bg-white/25" />
-        </div>
-
-        {/* Summary block, visible when peeking */}
-        <div className="shrink-0 px-4 md:px-5 pb-3 md:pt-5">
-          <div className="hidden md:flex items-center gap-2.5 mb-4">
-            <span className="grid place-items-center size-9 rounded-xl bg-cyan-400/15 text-cyan-300"><Droplets className="size-5" /></span>
-            <div className="leading-tight">
-              <div className="font-semibold">สมุทรสงคราม Flood</div>
-              <div className="text-xs text-zinc-300">ระดับน้ำแบบเรียลไทม์ {stations.length} สถานี</div>
-            </div>
-            <button onClick={() => setPanelOpen(false)} aria-label="ซ่อนแผงด้านข้าง" title="ซ่อนแผง" className={`${iconBtn} ml-auto`}>
-              <PanelLeftClose className="size-4" />
-            </button>
-          </div>
-          <h1 className="text-lg md:text-2xl font-semibold leading-snug">
-            {replaySnap ? 'ตอนนั้นน้ำ' : 'ตอนนี้น้ำ'} <span className={STATUS[overall].text}>{loading && !stations.length ? '...' : headline}</span>
-          </h1>
-          {loadError && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-red-300">
-              <TriangleAlert className="size-3.5 shrink-0" /> โหลดข้อมูลไม่สำเร็จ
-              <button onClick={fetchData} className="underline underline-offset-2 hover:text-white">ลองใหม่</button>
-            </p>
-          )}
-          {feedAgeMin > 30 && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-300">
-              <TriangleAlert className="size-3.5 shrink-0" /> ข้อมูลล่าสุดเมื่อ {time} น. แหล่งข้อมูลอาจล่าช้า
-            </p>
-          )}
-          <div className="mt-2 md:mt-3 grid grid-cols-3 gap-2">
-            {summary.map(([k, label, n]) => {
-              const on = filter === k;
-              const glow = k === 'critical' && n > 0 ? 'shadow-[0_0_28px_-4px_rgba(255,93,93,0.55)]' : '';
-              return (
-                <button key={k} onClick={() => goFilter(k)} aria-pressed={on}
-                  className={`flex items-baseline gap-2 md:block rounded-xl md:rounded-2xl px-3 py-1.5 md:py-2.5 text-left ring-1 transition active:scale-[0.98] ${glow} ${on ? SUMMARY[k].on : 'bg-white/[0.03] ring-white/10 hover:bg-white/[0.07]'}`}>
-                  <div className={`text-xl md:text-2xl font-semibold tabular-nums leading-none ${SUMMARY[k].text}`}>{n}</div>
-                  <div className="md:mt-1.5 text-xs text-zinc-300">{label}</div>
+              {loadError && (
+                <button onClick={fetchData} className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3.5 py-2 text-sm text-red-300">
+                  <TriangleAlert className="size-4" /> โหลดข้อมูลไม่สำเร็จ ลองใหม่
                 </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="md:hidden shrink-0">
-          <ReplayControl variant="sheet" {...replayProps} />
-        </div>
-
-        <div role="tablist" className="shrink-0 px-4 md:px-5 pb-2 flex gap-1 border-b border-white/10">
-          {tabs.map(([t, l]) => (
-            <button key={t} role="tab" aria-selected={tab === t} onClick={() => { setTab(t); expand(); }}
-              className={`flex-1 py-2 rounded-xl text-sm transition ${tab === t ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:text-white'}`}>{l}</button>
-          ))}
-        </div>
-
-        </div>
-
-        {/* Scrollable body */}
-        <div data-snap={sheet} className="panel-body custom-scrollbar px-4 md:px-5">
-          {tab === 'stations' && (
-            <div className="pt-3 space-y-3">
-              {selectedStation && (
-                <div className="rounded-2xl bg-cyan-400/10 ring-1 ring-cyan-400/30 p-3.5 flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">{selectedStation.name}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-zinc-300 tabular-nums">
-                      <span>น้ำ {selectedStation.waterLevel} / ตลิ่ง {selectedStation.bankHeight} ม.</span>
-                      <TrendLabel st={selectedStation} />
-                    </div>
-                  </div>
-                  <button onClick={() => share(selectedStation)} aria-label="แชร์สถานีนี้" className={iconBtn}><Share2 className="size-4" /></button>
-                  <button onClick={() => setSelectedId(null)} aria-label="ปิด" className={iconBtn}><X className="size-4" /></button>
-                </div>
               )}
+              {!loadError && feedAgeMin > 30 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3.5 py-2 text-sm text-amber-200">
+                  <TriangleAlert className="size-4" /> ข้อมูลอาจล่าช้า
+                </span>
+              )}
+            </div>
 
-              <div className="flex gap-2">
-                <div className="relative flex-1 min-w-0">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
-                  <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onFocus={() => setSheet('full')}
-                    placeholder="ค้นหาสถานีหรือชื่อคลอง" aria-label="ค้นหาสถานี"
-                    className="w-full rounded-xl bg-white/[0.06] py-2.5 pl-9 pr-3 text-sm placeholder:text-zinc-400 outline-none ring-1 ring-white/10 focus:ring-cyan-400/60" />
-                </div>
-                <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="เรียงตาม"
-                  className="w-28 rounded-xl bg-zinc-900/80 px-2.5 py-2.5 text-xs text-zinc-200 ring-1 ring-white/10 outline-none">
-                  <option value="capacity">ใกล้ตลิ่ง</option>
-                  <option value="change">เปลี่ยนมากสุด</option>
-                  <option value="level">ระดับสูงสุด</option>
-                  <option value="updated">อัปเดตล่าสุด</option>
-                  <option value="name">ชื่อ ก-ฮ</option>
-                </select>
-              </div>
+            <h1 className="mt-6 text-5xl font-bold leading-[1.12] tracking-tight md:text-7xl">
+              สมุทรสงคราม
+              <br />
+              {replaySnap ? 'ตอนนั้น' : 'ตอนนี้'} น้ำ
+              <span className={`wavy ${DIR[dir].cls}`}>{DIR[dir].word}</span>
+            </h1>
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-zinc-200 md:text-xl">{subtitle}</p>
 
-              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 -mx-1 px-1">
-                {pills.map(([key, label, n]) => (
-                  <button key={key} onClick={() => setFilter(filter === key ? 'all' : key)} aria-pressed={filter === key}
-                    className={`shrink-0 px-3 py-1 rounded-full text-xs transition ${filter === key ? 'bg-cyan-400 text-zinc-950 font-medium' : 'bg-white/[0.06] text-zinc-300 hover:bg-white/10'}`}>
-                    {label} <span className="tabular-nums opacity-70">{n}</span>
-                  </button>
-                ))}
-                {filter !== 'all' && (
-                  <button onClick={() => setFilter('all')} className="shrink-0 px-3 py-1 rounded-full text-xs text-zinc-300 hover:text-white">ล้างตัวกรอง</button>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                {loading && !stations.length ? (
-                  Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-[88px] rounded-2xl bg-white/5 animate-pulse" />)
-                ) : list.length === 0 ? (
-                  <p className="text-center text-zinc-400 text-sm py-10">ไม่พบสถานีที่ตรงกับการค้นหา ลองล้างตัวกรอง</p>
-                ) : (
-                  list.map((st) => {
-                    const k = kOf(st);
-                    const pct = Number(st.capacityPercent) || 0;
-                    const glow = k === 'critical' ? 'shadow-[0_0_24px_-8px_rgba(255,93,93,0.7)]' : '';
-                    return (
-                      <button key={st.id} onClick={() => pick(st)}
-                        className={`w-full text-left rounded-2xl p-3.5 ring-1 transition active:scale-[0.99] ${glow} ${
-                          selectedId === st.id ? 'bg-white/10 ring-cyan-400/50' : 'bg-white/[0.04] ring-white/10 hover:bg-white/[0.08]'
-                        }`}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium truncate">{st.name}</div>
-                            <div className="mt-1 flex items-center gap-2.5">
-                              <TrendLabel st={st} />
-                              <span className="text-[11px] text-zinc-400 tabular-nums">{fmtTime(st.updatedAt)} น.</span>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className={`text-xl font-semibold tabular-nums leading-none ${STATUS[k].text}`}>{st.capacityPercent}%</div>
-                            <span className={`mt-1.5 inline-block px-1.5 py-0.5 rounded-md text-[10px] font-medium ${STATUS[k].chip}`}>{STATUS[k].label}</span>
-                          </div>
-                        </div>
-                        <div className="mt-3"><Gauge pct={pct} k={k} /></div>
-                        <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400 tabular-nums">
-                          <span>น้ำ {st.waterLevel} ม.</span>
-                          <Spark id={String(st.id)} history={history} at={replay} color={COLORS[k]} />
-                          <span>ตลิ่ง {st.bankHeight} ม.</span>
-                        </div>
+            <div className="relative mt-7 max-w-xl">
+              <Search className="pointer-events-none absolute left-5 top-1/2 size-5 -translate-y-1/2 text-[#8fd3f4]" />
+              <input value={heroQ} onChange={(e) => setHeroQ(e.target.value)} aria-label="ค้นหาสถานีหรือคลอง"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && heroQ.trim()) {
+                    setSearchQuery(heroQ.trim());
+                    setFilter('all');
+                    scrollTo('stations');
+                  }
+                }}
+                placeholder="ค้นหาคลอง แม่น้ำ หรือสถานี"
+                className="glass w-full rounded-full py-4 pl-14 pr-5 text-base outline-none placeholder:text-zinc-400 focus:ring-2 focus:ring-[#8fd3f4]/50" />
+              {suggestions.length > 0 && (
+                <ul className="glass absolute inset-x-0 top-[calc(100%+8px)] z-20 overflow-hidden rounded-2xl p-1.5 shadow-2xl shadow-black/50">
+                  {suggestions.map((s) => (
+                    <li key={s.id}>
+                      <button onClick={() => pick(s)} className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left text-sm hover:bg-white/10">
+                        <span className="truncate">{s.name}</span>
+                        <span className={`shrink-0 font-semibold tabular-nums ${STATUS[kOf(s)].text}`}>{s.capacityPercent}%</span>
                       </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-
-          {tab === 'overview' && (
-            <div className="pt-3 space-y-3">
-              <div className={`${sub} p-4`}>
-                <CanalGauge pct={avg} k={overall} />
-                <p className="mt-2 text-sm text-zinc-300">
-                  ระดับน้ำเฉลี่ยทุกสถานี <span className="text-white font-semibold tabular-nums">{avg.toFixed(0)}%</span> ของความสูงตลิ่ง
-                </p>
-              </div>
-
-              <div className={`${sub} p-4`}>
-                <div className="text-sm text-zinc-300">ทิศทางของน้ำ</div>
-                <div className="mt-3 flex h-2 rounded-full overflow-hidden bg-white/10" role="img"
-                  aria-label={`กำลังขึ้น ${counts.rising} กำลังลด ${counts.falling} ทรงตัว ${counts.stable}`}>
-                  {(['rising', 'stable', 'falling'] as const).map((t) => (
-                    <div key={t} className={TREND[t].bg} style={{ width: `${(counts[t] / trendTotal) * 100}%` }} />
+                    </li>
                   ))}
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-1">
-                  {(['rising', 'falling', 'stable'] as const).map((t) => {
-                    const T = TREND[t];
-                    const body = (
-                      <>
-                        <div className={`flex items-center gap-1 text-2xl font-semibold tabular-nums ${T.text}`}><T.Icon className="size-4" />{counts[t]}</div>
-                        <div className="text-xs text-zinc-300 mt-0.5">{T.label}</div>
-                      </>
-                    );
-                    return t === 'stable' ? <div key={t} className="p-2">{body}</div> : (
-                      <button key={t} onClick={() => goFilter(t)} className="p-2 text-left rounded-xl hover:bg-white/5 transition">{body}</button>
-                    );
-                  })}
-                </div>
-              </div>
+                </ul>
+              )}
+            </div>
 
-              <button onClick={() => goFilter('stale')} className={`${sub} w-full p-4 flex items-center justify-between text-left hover:bg-white/[0.07] transition`}>
-                <span className="text-sm text-zinc-300">ไม่ส่งค่าเกิน 3 ชั่วโมง</span>
-                <span className="text-2xl font-semibold tabular-nums text-zinc-300">{counts.stale}</span>
+            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-4">
+              <button onClick={() => scrollTo('map')} className="btn-primary flex items-center gap-3 rounded-full py-3.5 pl-6 pr-3 text-base">
+                เปิดแผนที่จุดวัด
+                <span className="grid size-9 place-items-center rounded-full bg-black/10"><ArrowDownRight className="size-5" /></span>
               </button>
+              <button onClick={nearMe} className="flex items-center gap-2 border-b border-white/30 pb-0.5 text-base font-medium hover:border-white">
+                <LocateFixed className="size-4" /> ค้นหาคลองใกล้บ้าน
+              </button>
+              <button onClick={() => share()} className="flex items-center gap-2 border-b border-white/30 pb-0.5 text-base font-medium hover:border-white">
+                <Share2 className="size-4" /> แชร์
+              </button>
+            </div>
 
+            <div className="mt-8 flex flex-wrap gap-2.5">
+              <span className={chip}><TrendingUp className="size-4 text-orange-300" /> น้ำกำลังขึ้น {counts.rising} จุด ลด {counts.falling} จุด</span>
               {top && (
-                <button onClick={() => pick(top)} className={`${sub} w-full p-4 flex items-center justify-between gap-4 text-left hover:bg-white/[0.07] transition`}>
-                  <div className="min-w-0">
-                    <div className="text-xs text-zinc-300">น้ำใกล้ตลิ่งที่สุด</div>
-                    <div className="text-sm font-medium truncate mt-1">{top.name}</div>
-                  </div>
-                  <div className={`text-2xl font-semibold tabular-nums ${STATUS[kOf(top)].text}`}>{top.capacityPercent}%</div>
+                <button onClick={() => pick(top)} className={`${chip} transition hover:bg-white/10`}>
+                  สูงสุดตอนนี้ {shortName(top.name)} <b className={`tabular-nums ${STATUS[kOf(top)].text}`}>{top.capacityPercent}%</b>
                 </button>
               )}
-
-              {([['rising', 'ขึ้นเร็วที่สุด', movers.rising], ['falling', 'ลดเร็วที่สุด', movers.falling]] as const)
-                .filter(([, , items]) => items.length > 0)
-                .map(([t, title, items]) => {
-                  const I = TREND[t].Icon;
-                  return (
-                    <div key={t} className={`${sub} p-4`}>
-                      <h3 className={`flex items-center gap-1.5 text-sm font-medium ${TREND[t].text}`}>
-                        <I className="size-4" />
-                        {movers.hasDelta ? title : `${TREND[t].label} ใกล้ตลิ่งที่สุด`}
-                      </h3>
-                      <ul className="mt-1.5">
-                        {items.map((s) => (
-                          <li key={s.id}>
-                            <button onClick={() => pick(s)} className="w-full flex items-center justify-between gap-3 py-2 text-left text-sm text-zinc-200 hover:text-white">
-                              <span className="truncate">{s.name}</span>
-                              <span className="tabular-nums shrink-0 text-zinc-300">{movers.hasDelta ? fmtChange(s.change6h) : `${s.capacityPercent}%`}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-
-              <p className="text-[11px] leading-relaxed text-zinc-400 pt-1">
-                ข้อมูลจากหน่วยงานของรัฐ นำมาจัดแสดงใหม่ให้ดูง่ายขึ้น ไม่ใช่ประกาศทางการ ค่าที่วัดได้เป็นของจุดติดตั้งเท่านั้น พื้นที่ใกล้เคียงอาจสูงหรือต่ำกว่านี้ แผนที่ &copy; CARTO &copy; OpenFreeMap &copy; OpenStreetMap
-              </p>
+              {nextHigh && (
+                <button onClick={() => scrollTo('tide')} className={`${chip} transition hover:bg-white/10`}>
+                  <Waves className="size-4 text-[#8fd3f4]" /> น้ำทะเลหนุนสูงสุด{nextHigh.tomorrow ? 'พรุ่งนี้' : 'ถัดไป'} {nextHigh.time} น. ({nextHigh.height} ม.)
+                </button>
+              )}
             </div>
-          )}
+          </div>
 
-          {tab === 'tide' && (
-            <div className="pt-3">
-              <h2 className="flex items-center gap-2 text-base font-medium"><Waves className="size-4 text-cyan-300" /> น้ำทะเลหนุน</h2>
-              <p className="text-xs text-zinc-300 mt-1 mb-3">คาดการณ์น้ำขึ้นน้ำลงของวันนี้ ช่วงน้ำขึ้นสูงมีผลต่อระดับน้ำในคลอง</p>
-              <div className={`${sub} p-4`}><TideChart tides={tides} /></div>
-            </div>
-          )}
+          <div className="lg:-mr-20">
+            <HeroScene pct={avg} status={overall} label={`${avg.toFixed(0)}% ของตลิ่ง`} />
+          </div>
         </div>
-      </aside>
+      </header>
+
+      <div className="mx-auto max-w-6xl space-y-24 px-4 pb-44 pt-14 md:space-y-32 md:px-6 md:pt-20">
+        <section id="my-area">
+          <SectionHead eyebrow="ย่านของฉัน" title="น้ำใกล้บ้านเป็นอย่างไร" desc="เลือกอำเภอ หรือให้เราหาสถานีวัดน้ำที่ใกล้ตำแหน่งของคุณที่สุด" />
+          <MyArea stations={stations} area={area} onArea={setArea} userPos={userPos} onLocate={() => locate('area')}
+            history={history} replay={replay} selectedId={selectedId} onPick={pick} />
+        </section>
+
+        <section id="overview">
+          <SectionHead eyebrow="ภาพรวม" title="สถานการณ์ทั้งจังหวัด" desc="สรุปทุกสถานีในพริบตา กดตัวเลขเพื่อดูรายชื่อสถานีนั้น" />
+          <Overview counts={counts} avg={avg} top={top} movers={movers} onFilter={goFilter} onPick={pick} />
+        </section>
+
+        <section id="map">
+          <SectionHead eyebrow="แผนที่" title="แผนที่จุดวัดน้ำ" desc="แตะจุดเพื่อดูรายละเอียด สลับเป็นมุมมอง 3 มิติ หรือกดเต็มจอเพื่อสำรวจ" />
+          <div id="map-stage" className="h-[68vh] min-h-[420px]">
+            <MapStage
+              stations={list} selectedStation={selectedStation} focusKey={focusKey} userPos={userPos}
+              colorBy={colorBy} onColorBy={setColorBy} viewMode={viewMode} onViewMode={setViewMode}
+              fun={fun} onFun={setFun} cam={cam} onCam={setCam} layers={layers} onLayers={setLayers}
+              fullscreen={fullscreen} onFullscreen={setFullscreen}
+              onSelect={select}
+              onUnsupported={() => {
+                setViewMode('2d');
+                say('เปิดแผนที่ 3 มิติไม่ได้ในอุปกรณ์นี้ จึงกลับไปแบบ 2 มิติ');
+              }}
+              onLocate={() => locate('map')} onShare={() => share()} onRefresh={fetchData} loading={loading}
+            >
+              {selectedCard}
+            </MapStage>
+          </div>
+          {!fullscreen && selectedCard && <div className="mt-4">{selectedCard}</div>}
+        </section>
+
+        <section id="history">
+          <SectionHead eyebrow="ย้อนหลัง" title="ระดับน้ำ 24 ชั่วโมงที่ผ่านมา" desc="เลือกสถานีเพื่อดูกราฟ หรือเลื่อนแถบด้านล่างเพื่อย้อนดูทั้งหน้าเว็บ ณ เวลานั้น" />
+          <HistoryChart stations={stations} history={history} replay={replay} selectedId={selectedId} onSelect={(id) => setSelectedId(id)} />
+        </section>
+
+        <section id="tide">
+          <SectionHead eyebrow="น้ำขึ้นลง" title="น้ำทะเลหนุน" desc="คาดการณ์น้ำขึ้นน้ำลงของวันนี้ ช่วงน้ำขึ้นสูงมีผลต่อระดับน้ำในคลอง" />
+          <div className={`${card} p-5 md:p-6`}><TideChart tides={tides} /></div>
+        </section>
+
+        <section id="stations">
+          <SectionHead eyebrow="ทุกจุดวัด" title="รายชื่อสถานีวัดน้ำ" desc="ค้นหา กรอง และเรียงลำดับสถานีทั้งหมด" />
+          <StationsSection list={list} counts={counts} total={stations.length} filter={filter} onFilter={setFilter} sort={sort} onSort={setSort}
+            search={searchQuery} onSearch={setSearchQuery} loading={loading} history={history} replay={replay} selectedId={selectedId} onPick={pick} />
+        </section>
+
+        <footer className="border-t border-white/10 pt-8 text-xs leading-relaxed text-zinc-400">
+          ข้อมูลระดับน้ำและน้ำขึ้นน้ำลงจากหน่วยงานของรัฐ นำมาจัดแสดงใหม่ให้ดูง่ายขึ้น ไม่ใช่ประกาศทางการ ค่าที่วัดได้เป็นของจุดติดตั้งเท่านั้น พื้นที่ใกล้เคียงอาจสูงหรือต่ำกว่านี้
+          <br />
+          แผนที่ &copy; OpenStreetMap contributors, OpenFreeMap
+        </footer>
+      </div>
+
+      <ReplayBar history={history} replay={replay} playing={playing} snapT={replaySnap?.t ?? null} onLive={onLive} onScrub={onScrub} onPlay={onPlay} />
 
       {toast && (
-        <div role="status" className="toast rounded-full bg-zinc-100 text-zinc-900 text-sm font-medium px-4 py-2 shadow-xl max-w-[90vw] text-center">
-          {toast}
-        </div>
+        <div role="status" className="toast rounded-full">{toast}</div>
       )}
     </main>
   );

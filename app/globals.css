@@ -585,3 +585,90 @@ html {
     height: 30px;
   }
 }
+
+/* =====================================================================
+   Scrolling site (POPNIX-style redesign)
+   ===================================================================== */
+.site {
+  position: relative;
+  min-height: 100dvh;
+  color: #e8f1ef;
+  background:
+    radial-gradient(1100px 600px at 85% -8%, rgba(143, 211, 244, 0.1), transparent 60%),
+    radial-gradient(900px 600px at -10% 38%, rgba(79, 209, 197, 0.07), transparent 60%),
+    #06121a;
+}
+section[id] {
+  scroll-margin-top: 104px;
+}
+
+.hero-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(520px 320px at 78% 18%, rgba(223, 243, 255, 0.1), transparent 70%),
+    linear-gradient(to bottom, transparent 60%, #06121a);
+}
+
+.btn-primary {
+  background: #8fd3f4;
+  color: #06242a;
+  font-weight: 600;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.wavy {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 10px;
+  margin-left: 0.25em;
+}
+
+/* Hero illustration */
+.scene-wave {
+  animation: drift 7s linear infinite;
+}
+@keyframes scene-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2.5px) rotate(1.2deg); }
+}
+@keyframes scene-twinkle {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.2; }
+}
+
+/* Embedded / fullscreen map surface (same night-mode treatment as the old full-page map) */
+.mapbox {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+}
+.mapbox .leaflet-container {
+  width: 100%;
+  height: 100%;
+}
+.mapbox .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.92) saturate(0.85);
+}
+
+/* Toast floats above the fixed history bar */
+.toast {
+  position: fixed;
+  z-index: 90;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
+  max-width: 90vw;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  color: #18181b;
+  background: #f4f4f5;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
