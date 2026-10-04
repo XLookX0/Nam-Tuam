@@ -30,6 +30,10 @@ export interface MapProps {
   onCameraEnd?: () => void;
 }
 
+// Standard OpenStreetMap tiles: labels in Thai, buildings, landuse. Kept in one place on purpose: OSM asks sites not to
+// hard-code its server, and if traffic ever grows you can swap this for a hosted OSM tile provider without touching the rest.
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
 const CENTER: [number, number] = [13.4093, 100.0022];
 const BOUNDS: L.LatLngBoundsExpression = [
   [13.2, 99.75],
@@ -112,8 +116,9 @@ export default function FloodMap({ stations, selectedStation, focusKey, colorBy 
       zoomControl={false}
     >
       <TileLayer
-        url="https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_47se_1_8b93bc2f9c99b721b2d3608a"
-        attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        url={TILE_URL}
+        maxZoom={19}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | <a href="https://www.openstreetmap.org/fixthemap">แก้ไขแผนที่</a>'
       />
       <Controller selected={selectedStation} focusKey={focusKey} markers={markers} />
 

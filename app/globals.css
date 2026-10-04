@@ -248,10 +248,11 @@ body {
   }
 }
 
-/* 2D basemap theme: the neutral dark tiles are re-coloured through a teal-navy gradient map (SVG filter #flood-tint,
-   defined in page.tsx). Markers and popups are separate panes and stay untouched. */
+/* 2D basemap theme: standard OSM tiles in "night mode". Inverting then rotating the hue back keeps real-world colours
+   (rose highways, green parks, blue water) while turning the light map dark; labels become light on dark.
+   Markers and popups live in other panes and are untouched. */
 .map-layer .leaflet-tile-pane {
-  filter: url(#flood-tint);
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.92) saturate(0.85);
 }
 
 /* ---------- Phones ---------- */
