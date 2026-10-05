@@ -14,11 +14,11 @@ export const NAV: [string, string][] = [
 
 const topStyle = { top: 'calc(env(safe-area-inset-top, 0px) + 12px)' } as const;
 
-function Brand() {
+function Brand({ collapse = false }: { collapse?: boolean }) {
   return (
     <a href="#top" className="flex items-center gap-2.5 shrink-0" aria-label="กลับขึ้นด้านบน">
       <span className="grid place-items-center size-9 rounded-xl bg-[#8fd3f4]/15 text-[#8fd3f4]"><Droplets className="size-5" /></span>
-      <span className="font-semibold leading-none">
+      <span className={`font-semibold leading-none whitespace-nowrap ${collapse ? 'hidden xl:inline' : ''}`}>
         สมุทรสงคราม <span className="text-[#8fd3f4]">Flood</span>
       </span>
     </a>
@@ -50,24 +50,26 @@ export default function SiteNav({ onNear, onOpen3D, onShare }: { onNear: () => v
 
   return (
     <>
-      {/* Desktop: floating pill */}
-      <nav aria-label="เมนูหลัก" style={topStyle}
-        className="glass fixed left-1/2 z-50 hidden -translate-x-1/2 items-center gap-1 rounded-full py-2 pl-4 pr-2 shadow-xl shadow-black/30 lg:flex">
-        <Brand />
-        <span className="mx-2 h-6 w-px bg-white/10" />
-        {NAV.map(([label, id]) => (
-          <a key={id} href={`#${id}`} aria-current={active === id ? 'true' : undefined}
-            className={`rounded-full px-3 py-2 text-sm transition ${active === id ? 'bg-white/10 text-white' : 'text-zinc-300 hover:bg-white/5 hover:text-white'}`}>
-            {label}
-          </a>
-        ))}
-        <button onClick={onOpen3D} className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium text-[#8fd3f4] transition hover:bg-white/5">
-          <Box className="size-4" /> 3 มิติ
-        </button>
-        <button onClick={onNear} className="ml-1 flex items-center gap-1.5 rounded-full bg-[#8fd3f4]/15 px-4 py-2 text-sm font-medium text-[#8fd3f4] transition hover:bg-[#8fd3f4]/25">
-          <LocateFixed className="size-4" /> ใกล้ฉัน
-        </button>
-      </nav>
+      {/* Desktop: floating pill. The wrapper spans the screen and centres the pill, so the pill is never squeezed to half the width. */}
+      <div style={topStyle} className="pointer-events-none fixed inset-x-0 z-50 hidden justify-center px-4 lg:flex">
+        <nav aria-label="เมนูหลัก"
+          className="glass pointer-events-auto flex max-w-full items-center gap-1 whitespace-nowrap rounded-full py-2 pl-4 pr-2 shadow-xl shadow-black/30">
+          <Brand collapse />
+          <span className="mx-2 h-6 w-px bg-white/10" />
+          {NAV.map(([label, id]) => (
+            <a key={id} href={`#${id}`} aria-current={active === id ? 'true' : undefined}
+              className={`rounded-full px-3.5 py-2 text-sm transition ${active === id ? 'bg-white/10 text-white' : 'text-zinc-300 hover:bg-white/5 hover:text-white'}`}>
+              {label}
+            </a>
+          ))}
+          <button onClick={onOpen3D} className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium text-[#8fd3f4] transition hover:bg-white/5">
+            <Box className="size-4" /> 3 มิติ
+          </button>
+          <button onClick={onNear} className="ml-1 flex items-center gap-1.5 rounded-full bg-[#8fd3f4]/15 px-4 py-2 text-sm font-medium text-[#8fd3f4] transition hover:bg-[#8fd3f4]/25">
+            <LocateFixed className="size-4" /> ใกล้ฉัน
+          </button>
+        </nav>
+      </div>
 
       {/* Phones and tablets: compact bar + full-screen menu */}
       <nav aria-label="เมนูหลัก" style={topStyle}

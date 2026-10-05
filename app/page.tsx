@@ -377,11 +377,11 @@ export default function Dashboard() {
               )}
             </div>
 
-            <h1 className="mt-6 text-5xl font-bold leading-[1.12] tracking-tight md:text-7xl">
+            <h1 className="mt-6 text-5xl font-bold leading-[1.12] tracking-tight md:text-6xl xl:text-7xl">
               สมุทรสงคราม
               <br />
               {replaySnap ? 'ตอนนั้น' : 'ตอนนี้'} น้ำ
-              <span className={`wavy ${DIR[dir].cls}`}>{DIR[dir].word}</span>
+              <span className={`wavy whitespace-nowrap ${DIR[dir].cls}`}>{DIR[dir].word}</span>
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-zinc-200 md:text-xl">{subtitle}</p>
 

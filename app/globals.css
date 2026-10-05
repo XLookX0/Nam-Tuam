@@ -672,3 +672,31 @@ section[id] {
   background: #f4f4f5;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
+
+/* ---------- Map stage: tools dock and attribution ---------- */
+.stage-dock {
+  position: absolute;
+  z-index: 10;
+  right: 12px;
+  top: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.stage-fs .stage-dock {
+  top: calc(env(safe-area-inset-top, 0px) + 68px);
+}
+@media (min-width: 768px) {
+  /* fullscreen on a big screen: centred on the right edge, clear of the top tools */
+  .stage-fs .stage-dock {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+}
+/* Fullscreen: lift the map credits above the fixed history bar */
+.stage-fs .leaflet-bottom,
+.stage-fs .maplibregl-ctrl-bottom-left,
+.stage-fs .maplibregl-ctrl-bottom-right {
+  margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+}

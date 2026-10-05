@@ -36,8 +36,8 @@ export default function ReplayBar({
           className={`grid size-10 shrink-0 place-items-center rounded-xl transition ${replay == null ? 'text-zinc-400' : 'bg-[#8fd3f4]/15 text-[#8fd3f4]'}`}>
           <History className="size-[18px]" />
         </button>
-        <div className="w-[84px] shrink-0 leading-tight">
-          <div className="text-[11px] text-zinc-400 max-sm:hidden">ย้อนดูข้อมูล 24 ชม.</div>
+        <div className="w-[92px] shrink-0 whitespace-nowrap leading-tight md:w-[112px]">
+          <div className="text-[11px] text-zinc-400 max-sm:hidden">ย้อนหลัง 24 ชม.</div>
           <div className={`truncate text-sm font-semibold ${snapT ? 'text-[#8fd3f4]' : 'text-zinc-100'}`}>{label}</div>
         </div>
         <input type="range" className="replay-range min-w-0 flex-1" aria-label="เลื่อนดูระดับน้ำย้อนหลัง"
