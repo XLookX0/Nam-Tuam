@@ -1,18 +1,25 @@
 import { redis } from '@/lib/redis';
-import { CAMERAS, CAM_KEY } from '@/lib/cameras';
+import { CAMERAS, CAM_KEY, CamStatus } from '@/lib/cameras';
 
 export const dynamic = 'force-dynamic';
 
-/** Timestamps (epoch seconds, oldest first) of every saved frame for one camera: up to 3 days, ~1,440 numbers. */
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  if (!CAMERAS.some((c) => c.id === id)) return new Response('not found', { status: 404 });
+/** Camera list with the newest frame time and how many frames are stored. Two Redis commands per camera, cached 30 s. */
+export async function GET() {
+  const empty: CamStatus[] = CAMERAS.map((c) => ({ ...c, latestTs: null, count: 0 }));
   try {
-    const raw = (await redis.zrange(CAM_KEY(id), 0, -1)) as unknown[];
-    const frames = raw.map(Number).filter((n) => Number.isFinite(n));
-    return Response.json({ id, frames }, { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } });
+    const p = redis.pipeline();
+    CAMERAS.forEach((c) => {
+      p.zrange(CAM_KEY(c.id), -1, -1);
+      p.zcard(CAM_KEY(c.id));
+    });
+    const out = (await p.exec()) as unknown[];
+    const cameras: CamStatus[] = CAMERAS.map((c, i) => {
+      const last = (out[i * 2] as unknown[] | undefined)?.[0];
+      return { ...c, latestTs: last != null ? Number(last) : null, count: Number(out[i * 2 + 1]) || 0 };
+    });
+    return Response.json({ cameras }, { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } });
   } catch (err) {
-    console.error('[cameras frames]', err);
-    return Response.json({ id, frames: [] });
+    console.error('[cameras]', err);
+    return Response.json({ cameras: empty });
   }
 }
