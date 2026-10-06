@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  Building, Building2, Compass, Layers, LocateFixed, Maximize2, Minimize2, Map as MapIcon, RefreshCw, Route, Sailboat, Share2, Waves,
+  Building, Building2, Camera, Compass, Layers, LocateFixed, Maximize2, Minimize2, Map as MapIcon, RefreshCw, Route, Sailboat, Share2, Waves,
 } from 'lucide-react';
 import MapWrapper from '@/components/MapWrapper';
 import { funIconSvg } from '@/lib/funIcons';
@@ -32,6 +32,11 @@ export interface MapStageProps {
   onShare: () => void;
   onRefresh: () => void;
   loading: boolean;
+  cameras: { id: string; name: string; lat: number; lng: number }[];
+  showCameras: boolean;
+  onShowCameras: (v: boolean) => void;
+  onCameraOpen: (id: string) => void;
+  focus: { lat: number; lng: number; key: number } | null;
   children?: React.ReactNode; // shown over the map in fullscreen (selected station card)
 }
 
@@ -61,6 +66,10 @@ export default function MapStage(p: MapStageProps) {
           fun={p.fun}
           onCameraEnd={() => p.onCam({ ...p.cam, mode: null })}
           onUnsupported={p.onUnsupported}
+          cameras={p.cameras}
+          showCameras={p.showCameras}
+          onCameraOpen={p.onCameraOpen}
+          focus={p.focus}
         />
       </div>
 
@@ -82,6 +91,12 @@ export default function MapStage(p: MapStageProps) {
         </div>
         <div className="flex shrink-0 gap-2">
           <button onClick={p.onLocate} aria-label="ตำแหน่งของฉัน" title="ตำแหน่งของฉัน" className={tool}><LocateFixed className="size-4" /></button>
+          {p.cameras.length > 0 && (
+            <button onClick={() => p.onShowCameras(!p.showCameras)} aria-pressed={p.showCameras} aria-label="แสดงกล้อง" title="แสดงกล้อง"
+              className={`${glass} grid size-10 place-items-center rounded-xl transition ${p.showCameras ? 'bg-[#8fd3f4] text-[#06242a]' : 'text-zinc-200 hover:bg-white/10'}`}>
+              <Camera className="size-4" />
+            </button>
+          )}
           {fs && <button onClick={p.onShare} aria-label="แชร์" title="แชร์" className={`${tool} max-sm:hidden`}><Share2 className="size-4" /></button>}
           {fs && <button onClick={p.onRefresh} aria-label="รีเฟรช" title="รีเฟรช" className={`${tool} max-sm:hidden`}><RefreshCw className={`size-4 ${p.loading ? 'animate-spin text-[#8fd3f4]' : ''}`} /></button>}
           <button onClick={() => p.onFullscreen(!fs)} aria-label={fs ? 'ออกจากเต็มจอ' : 'เปิดเต็มจอ'} title={fs ? 'ออกจากเต็มจอ' : 'เปิดเต็มจอ'}

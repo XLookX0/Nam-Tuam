@@ -68,6 +68,11 @@ export function StationCard({
           <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
             <TrendLabel st={st} />
             <span className="text-[11px] text-zinc-400 tabular-nums">{fmtTime(st.updatedAt)} น.</span>
+            {st.freeboard != null && (
+              <span className="text-[11px] tabular-nums text-zinc-300">
+                {st.freeboard >= 0 ? `ต่ำกว่าตลิ่ง ${st.freeboard.toFixed(2)} ม.` : `สูงกว่าตลิ่ง ${Math.abs(st.freeboard).toFixed(2)} ม.`}
+              </span>
+            )}
             {distanceKm != null && <span className="text-[11px] text-cyan-300 tabular-nums">ห่าง {distanceKm.toFixed(1)} กม.</span>}
           </div>
         </div>

@@ -7,10 +7,13 @@ import HeroScene from '@/components/home/HeroScene';
 import SiteNav from '@/components/home/SiteNav';
 import ReplayBar from '@/components/home/ReplayBar';
 import MapStage from '@/components/home/MapStage';
+import CamerasSection from '@/components/home/Cameras';
+import CameraViewer from '@/components/home/CameraViewer';
 import { TrendLabel } from '@/components/home/StationCard';
 import { AreaId, Filter, HistoryChart, MyArea, Overview, SectionHead, Sort, StationsSection } from '@/components/home/Sections';
-import { Snapshot, applySnapshot, sixHourChange } from '@/lib/history';
-import { Station, ColorBy, CameraMode, MapLayers, isStale, haversineKm, fmtTime } from '@/lib/station';
+import { Snapshot, applySnapshot, recentTrend, sixHourChange } from '@/lib/history';
+import { CAMERAS, CamStatus } from '@/lib/cameras';
+import { Station, ColorBy, CameraMode, MapLayers, isStale, haversineKm, fmtTime, normalizeStation } from '@/lib/station';
 import { STATUS, card, glass, kOf } from '@/lib/ui';
 
 const shortName = (n: string) => n.replace(/\s*\(.*\)/, '').replace(/^สถานี(วัดน้ำ)?/, '').trim() || n;
@@ -51,6 +54,14 @@ export default function Dashboard() {
   const [cam, setCam] = useState<{ mode: CameraMode | null; key: number }>({ mode: null, key: 0 });
   const [layers, setLayers] = useState<MapLayers>({ canals: true, roads: true, buildings: true });
   const pendingId = useRef<string | null>(null);
+  const pendingCam = useRef<string | null>(null);
+
+  // ---- cameras ----
+  const [cameras, setCameras] = useState<CamStatus[]>(() => CAMERAS.map((c) => ({ ...c, latestTs: null, count: 0 })));
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const [savedCams, setSavedCams] = useState<string[]>([]);
+  const [showCameras, setShowCameras] = useState(true);
+  const [camFocus, setCamFocus] = useState<{ lat: number; lng: number; key: number } | null>(null);
 
   // ---- 24h history / replay ----
   const [history, setHistory] = useState<Snapshot[]>([]);
@@ -76,6 +87,43 @@ export default function Dashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch('/api/cameras');
+        const j = await r.json();
+        if (alive && Array.isArray(j.cameras)) setCameras(j.cameras);
+      } catch {
+        /* cameras are optional */
+      }
+    };
+    load();
+    const id = setInterval(() => !document.hidden && load(), 60000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      setSavedCams(JSON.parse(localStorage.getItem('nt:saved-cams') || '[]'));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const toggleSaved = (id: string) =>
+    setSavedCams((cur) => {
+      const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+      try {
+        localStorage.setItem('nt:saved-cams', JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+
   // Everything on the page reads `stations`, so replaying history needs no other changes.
   const stations = useMemo(() => {
     const n = history.length;
@@ -84,11 +132,17 @@ export default function Dashboard() {
       return rawStations.map((s) => {
         const a = applySnapshot(s, snap);
         a.change6h = sixHourChange(history, replay, String(s.id), a.waterLevel);
+        a.trend = recentTrend(history, replay, String(s.id), a.waterLevel) ?? a.trend;
         return a;
       });
     }
     if (!n) return rawStations;
-    return rawStations.map((s) => (s.change6h != null ? s : { ...s, change6h: sixHourChange(history, n - 1, String(s.id), Number(s.waterLevel)) }));
+    return rawStations.map((s) => ({
+      ...s,
+      change6h: s.change6h ?? sixHourChange(history, n - 1, String(s.id), Number(s.waterLevel)),
+      // live sources give a single reading, so work the direction out from the saved history
+      trend: recentTrend(history, n - 1, String(s.id), Number(s.waterLevel)) ?? s.trend,
+    }));
   }, [rawStations, history, replay]);
   const replaySnap = replay != null ? history[replay] ?? null : null;
 
@@ -117,7 +171,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error(`water-data responded ${res.status}`);
       const data = await res.json();
       setLoadError(false);
-      setStations(data.waterLevels || []);
+      setStations(((data.waterLevels || []) as Station[]).map(normalizeStation));
       setTides(data.tides || null);
       setLastUpdated(data.lastUpdated || '');
     } catch (err) {
@@ -131,6 +185,7 @@ export default function Dashboard() {
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     pendingId.current = sp.get('station');
+    pendingCam.current = sp.get('camera');
     if (sp.get('view') === '3d') setViewMode('3d');
     // Weak devices: start without 3D buildings (the heaviest layer); they can switch it on from the map tools
     const nav = navigator as Navigator & { deviceMemory?: number };
@@ -157,6 +212,22 @@ export default function Dashboard() {
     else u.searchParams.delete('view');
     window.history.replaceState(null, '', u);
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!pendingCam.current) return;
+    const c = cameras.find((x) => x.id === pendingCam.current);
+    if (c) {
+      pendingCam.current = null;
+      setViewerId(c.id);
+    }
+  }, [cameras]);
+  useEffect(() => {
+    if (pendingCam.current) return;
+    const u = new URL(window.location.href);
+    if (viewerId) u.searchParams.set('camera', viewerId);
+    else u.searchParams.delete('camera');
+    window.history.replaceState(null, '', u);
+  }, [viewerId]);
 
   // Fullscreen map: lock page scroll, Esc closes
   useEffect(() => {
@@ -302,6 +373,29 @@ export default function Dashboard() {
       /* user cancelled */
     }
   };
+
+  const shareCam = async (cam: CamStatus) => {
+    const url = new URL(window.location.href);
+    url.hash = '';
+    url.searchParams.delete('station');
+    url.searchParams.set('camera', cam.id);
+    try {
+      if (navigator.share) await navigator.share({ title: cam.name, text: `ภาพสดจากกล้อง ${cam.name}`, url: url.toString() });
+      else {
+        await navigator.clipboard.writeText(url.toString());
+        say('คัดลอกลิงก์แล้ว');
+      }
+    } catch {
+      /* user cancelled */
+    }
+  };
+  const camOnMap = (cam: CamStatus) => {
+    setViewerId(null);
+    setShowCameras(true);
+    setCamFocus((f) => ({ lat: cam.lat, lng: cam.lng, key: (f?.key ?? 0) + 1 }));
+    if (!fullscreen) scrollTo('map-stage');
+  };
+  const viewerCam = cameras.find((c) => c.id === viewerId) ?? null;
 
   const open3D = () => {
     setViewMode('3d');
@@ -457,6 +551,11 @@ export default function Dashboard() {
           <Overview counts={counts} avg={avg} top={top} movers={movers} onFilter={goFilter} onPick={pick} />
         </section>
 
+        <section id="cameras">
+          <SectionHead eyebrow="กล้อง CCTV" title="กล้องริมน้ำ" />
+          <CamerasSection cameras={cameras} stations={stations} userPos={userPos} onLocate={() => locate('area')} saved={savedCams} onOpen={setViewerId} />
+        </section>
+
         <section id="map">
           <SectionHead eyebrow="แผนที่" title="แผนที่จุดวัดน้ำ" desc="แตะจุดเพื่อดูรายละเอียด สลับเป็นมุมมอง 3 มิติ หรือกดเต็มจอเพื่อสำรวจ" />
           <div id="map-stage" className="h-[68vh] min-h-[420px]">
@@ -471,6 +570,7 @@ export default function Dashboard() {
                 say('เปิดแผนที่ 3 มิติไม่ได้ในอุปกรณ์นี้ จึงกลับไปแบบ 2 มิติ');
               }}
               onLocate={() => locate('map')} onShare={() => share()} onRefresh={fetchData} loading={loading}
+              cameras={cameras} showCameras={showCameras} onShowCameras={setShowCameras} onCameraOpen={setViewerId} focus={camFocus}
             >
               {selectedCard}
             </MapStage>
@@ -500,6 +600,11 @@ export default function Dashboard() {
           แผนที่ &copy; OpenStreetMap contributors, OpenFreeMap
         </footer>
       </div>
+
+      {viewerCam && (
+        <CameraViewer key={viewerCam.id} cam={viewerCam} saved={savedCams.includes(viewerCam.id)} onSave={() => toggleSaved(viewerCam.id)}
+          onShare={() => shareCam(viewerCam)} onViewMap={() => camOnMap(viewerCam)} onClose={() => setViewerId(null)} />
+      )}
 
       <ReplayBar history={history} replay={replay} playing={playing} snapT={replaySnap?.t ?? null} onLive={onLive} onScrub={onScrub} onPlay={onPlay} />
 

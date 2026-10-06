@@ -6,6 +6,7 @@ import { Droplets, LocateFixed, Menu, Share2, X, Box } from 'lucide-react';
 export const NAV: [string, string][] = [
   ['ย่านของฉัน', 'my-area'],
   ['ภาพรวม', 'overview'],
+  ['กล้อง', 'cameras'],
   ['แผนที่', 'map'],
   ['ย้อนหลัง', 'history'],
   ['น้ำขึ้นลง', 'tide'],

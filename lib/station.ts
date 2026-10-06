@@ -15,6 +15,8 @@ export interface Station {
   maxToday?: number;
   /** Set only while replaying history: the timestamp (ms) being shown. */
   asOf?: number;
+  /** Metres of room left below the bank top (negative = over the bank). Present for live stations. */
+  freeboard?: number;
 }
 
 export type ColorBy = 'level' | 'trend';
@@ -89,4 +91,26 @@ export function circlePolygon(lng: number, lat: number, radiusM: number, steps =
   }
   ring.push(ring[0]);
   return [ring];
+}
+
+/**
+ * "How full" the channel is, from the room left below the bank top. Unlike level / bank height, this stays correct for
+ * gauges measured from a different datum (e.g. water 14.36 m, bank 15.5 m).
+ * It lines up with the status thresholds and the 70% / 90% marks: 0.5 m left = 70%, 0.2 m = 90%, bank = 100%, 2 m+ = 0%.
+ */
+export function fillPct(free: number): number {
+  if (free <= 0) return Math.min(110, 100 + Math.min(-free, 0.1) * 100);
+  if (free <= 0.2) return 100 - (free / 0.2) * 10;
+  if (free <= 0.5) return 90 - ((free - 0.2) / 0.3) * 20;
+  return Math.max(0, 70 - ((free - 0.5) / 1.5) * 70);
+}
+
+/** Tidy a station as it comes from the API: trimmed name, and a percentage that always agrees with its freeboard. */
+export function normalizeStation(s: Station): Station {
+  const free = Number(s.freeboard);
+  return {
+    ...s,
+    name: String(s.name ?? '').trim() || 'สถานีตรวจวัด',
+    ...(s.freeboard != null && Number.isFinite(free) ? { capacityPercent: Number(fillPct(free).toFixed(2)) } : {}),
+  };
 }

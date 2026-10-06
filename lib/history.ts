@@ -58,3 +58,19 @@ export function sixHourChange(hist: Snapshot[], idx: number, id: string, level: 
   }
   return undefined;
 }
+
+/** Rising or falling from the last hour of saved readings, for sources that don't report a trend themselves. */
+export function recentTrend(hist: Snapshot[], idx: number, id: string, level: number): 'rising' | 'falling' | 'stable' | undefined {
+  if (!hist[idx]) return undefined;
+  const target = hist[idx].t - 60 * 60e3;
+  for (let i = idx; i >= 0; i--) {
+    if (hist[i].t <= target) {
+      if (target - hist[i].t > 40 * 60e3) return undefined; // gap in the data
+      const old = hist[i].d[id]?.[0];
+      if (old == null) return undefined;
+      const d = level - old;
+      return d > 0.03 ? 'rising' : d < -0.03 ? 'falling' : 'stable';
+    }
+  }
+  return undefined;
+}

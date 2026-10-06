@@ -5,6 +5,7 @@ import type * as ml from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Station, ColorBy, markerColor, pillarHeight, circlePolygon, fmtTime, isStale, PILLAR_FULL_M } from '@/lib/station';
 import { funKind, funIconSvg } from '@/lib/funIcons';
+import { CAM_PIN_SVG } from '@/lib/cameras';
 import type { MapProps } from './Map';
 
 // Next.js/Turbopack mangles MapLibre's web worker ("Worker failed to load"), so the library itself is loaded at
@@ -144,7 +145,7 @@ function popupHtml(st: Station) {
 }
 
 export default function Map3D(props: MapProps) {
-  const { stations, selectedStation, focusKey, colorBy = 'level', userPos, camera, layers, fun } = props;
+  const { stations, selectedStation, focusKey, colorBy = 'level', userPos, camera, layers, fun, cameras, showCameras, focus } = props;
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<ml.Map | null>(null);
   const popupRef = useRef<ml.Popup | null>(null);
@@ -422,6 +423,34 @@ export default function Map3D(props: MapProps) {
       items.forEach((it) => it.marker.remove());
     };
   }, [ready, stations, fun]);
+
+  // Camera pins: tap one to open its photo viewer
+  useEffect(() => {
+    const map = mapRef.current;
+    const gl = glRef.current;
+    if (!ready || !map || !gl || !showCameras || !cameras?.length) return;
+    const pins = cameras.map((c) => {
+      const el = document.createElement('div');
+      el.className = 'cam-pin';
+      el.title = c.name;
+      el.innerHTML = CAM_PIN_SVG;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        propsRef.current.onCameraOpen?.(c.id);
+      });
+      return new gl.Marker({ element: el, anchor: 'center' }).setLngLat([c.lng, c.lat]).addTo(map);
+    });
+    return () => pins.forEach((m) => m.remove());
+  }, [ready, cameras, showCameras]);
+
+  // Fly to a point (a camera) when asked
+  const focusKey2 = focus?.key;
+  useEffect(() => {
+    const map = mapRef.current;
+    const f = propsRef.current.focus;
+    if (!ready || !map || !f || !focusKey2) return;
+    map.flyTo({ center: [f.lng, f.lat], zoom: Math.max(map.getZoom(), 14.5), pitch: 60, duration: 1400, essential: true });
+  }, [ready, focusKey2]);
 
   // "My location" dot
   useEffect(() => {

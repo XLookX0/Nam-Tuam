@@ -700,3 +700,21 @@ section[id] {
 .stage-fs .maplibregl-ctrl-bottom-right {
   margin-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
 }
+
+/* ---------- Camera pins and modal helpers ---------- */
+.cam-pin {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  color: #8fd3f4;
+  background: #0a1c25;
+  border: 2px solid #8fd3f4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+.cam-pin svg {
+  width: 16px;
+  height: 16px;
+}

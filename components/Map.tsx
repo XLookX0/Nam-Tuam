@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { ArrowUp, ArrowDown, Minus, ExternalLink } from 'lucide-react';
+import { CAM_PIN_SVG } from '@/lib/cameras';
 import { Station, ColorBy, CameraMode, MapLayers, isStale, markerColor, fmtTime, fmtChange } from '@/lib/station';
 import 'leaflet/dist/leaflet.css';
 
@@ -24,6 +25,12 @@ export interface MapProps {
   camera?: { mode: CameraMode | null; key: number } | null;
   /** 3D only: basemap layer visibility. */
   layers?: MapLayers;
+  /** Camera pins (2D and 3D). */
+  cameras?: { id: string; name: string; lat: number; lng: number }[];
+  showCameras?: boolean;
+  onCameraOpen?: (id: string) => void;
+  /** Fly to a point (e.g. a camera) when `key` changes. */
+  focus?: { lat: number; lng: number; key: number } | null;
   /** 3D only: fun mode, a little vessel floats on every pillar. */
   fun?: boolean;
   /** 3D only: the map ended a camera mode itself (e.g. the user grabbed the map during the tour). */
@@ -39,6 +46,19 @@ const BOUNDS: L.LatLngBoundsExpression = [
   [13.2, 99.75],
   [13.65, 100.25],
 ];
+
+const camIcon = L.divIcon({ className: '', html: `<div class="cam-pin">${CAM_PIN_SVG}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+
+function FocusPoint({ focus }: { focus?: { lat: number; lng: number; key: number } | null }) {
+  const map = useMap();
+  const key = focus?.key;
+  useEffect(() => {
+    if (!focus || !key) return;
+    map.flyTo([focus.lat, focus.lng], Math.max(map.getZoom(), 15), { duration: 1.2 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, map]);
+  return null;
+}
 
 const iconCache = new globalThis.Map<string, L.DivIcon>();
 function makeIcon(color: string, critical: boolean, stale: boolean) {
@@ -92,7 +112,7 @@ function Controller({
   return null;
 }
 
-export default function FloodMap({ stations, selectedStation, focusKey, colorBy = 'level', userPos }: MapProps) {
+export default function FloodMap({ stations, selectedStation, focusKey, colorBy = 'level', userPos, cameras, showCameras, onCameraOpen, focus }: MapProps) {
   const markers = useRef(new globalThis.Map<string | number, L.Marker>());
 
   const items = useMemo(
@@ -121,6 +141,11 @@ export default function FloodMap({ stations, selectedStation, focusKey, colorBy 
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | <a href="https://www.openstreetmap.org/fixthemap">แก้ไขแผนที่</a>'
       />
       <Controller selected={selectedStation} focusKey={focusKey} markers={markers} />
+      <FocusPoint focus={focus} />
+      {showCameras &&
+        cameras?.map((c) => (
+          <Marker key={`cam-${c.id}`} position={[c.lat, c.lng]} icon={camIcon} zIndexOffset={600} title={c.name} eventHandlers={{ click: () => onCameraOpen?.(c.id) }} />
+        ))}
 
       {userPos && (
         <CircleMarker

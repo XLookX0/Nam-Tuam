@@ -40,3 +40,39 @@ Snapshot format: `{ "t": <epoch ms>, "d": { "<stationId>": [level, capacity%, st
 - Backfill history from the government API so the slider works on day one.
 - Notifications (LINE Notify alternative / web push) when a station turns critical.
 - More stations or districts, once the data source provides them.
+
+
+## Cameras (CCTV)
+How it works: every 3 minutes the Worker downloads one JPEG from each camera's snapshot URL, saves it in Cloudflare R2
+(`cam/<id>/<epoch>.jpg`) and indexes it in Redis (`cam:<id>:frames`, a sorted set). Frames older than 3 days are deleted
+once an hour. The Worker also serves frames at `/cam/<id>/<epoch>.jpg` (cached for a year, a frame never changes).
+The website reads the index through `/api/cameras` and `/api/cameras/<id>/frames`.
+
+Setup:
+1. Cloudflare dashboard -> R2 -> create a bucket (e.g. `nam-tuam-cams`).
+2. Worker -> Settings -> Bindings -> add an R2 bucket binding named `CAM_BUCKET`.
+3. Worker -> Settings -> Variables: add a secret `CAMERAS`, JSON such as
+   `[{"id":"cam-01","url":"https://your-camera/snapshot.jpg"},{"id":"cam-02","url":"..."}]`
+   (optional per camera: `"headers": {"Authorization": "Basic ..."}`). Add a secret `ADMIN_KEY` (any long random string) for manual tests.
+4. Worker -> Settings -> Trigger events: add cron `*/3 * * * *` and DELETE the old `*/15 * * * *` one
+   (the Worker runs the water sync every 15 minutes by itself).
+5. Vercel -> Environment Variables: `NEXT_PUBLIC_CAM_BASE` = your Worker URL (no trailing slash), then redeploy.
+6. Edit `lib/cameras.ts`: names, positions, nearest station, credit. The `id`s must match the Worker's `CAMERAS`.
+
+Tests:
+- `https://<worker>/?capture=1&key=<ADMIN_KEY>` takes one photo per camera now and reports `ok` or the error per camera.
+- `/api/cameras` shows `latestTs` and `count` per camera.
+
+Free-tier budget (3 cameras, one frame every 3 minutes): about 43k Redis commands a month (free plan: 500k),
+about 43k R2 writes (free: 1M) and roughly 350 MB stored for 3 days if each photo is about 80 KB (free: 10 GB).
+Camera URLs are secrets: they live only in the Worker variable, never in the website code.
+
+
+## Live water data (ThaiWater HII + RID SWOC)
+- The Worker merges two public sources; if both fail it falls back to the simulation (`source: SIMULATED` in the Worker's reply).
+- **Status** comes from freeboard (metres left below the bank top): 0.5 m or less = warning, 0.2 m or less = critical.
+- **The percentage** is derived from the same freeboard (`fillPct`, in both `worker.js` and `lib/station.ts`): 0.5 m left = 70%, 0.2 m = 90%, at the bank = 100%.
+  Plain level / bank height breaks for gauges measured from a different datum (e.g. level 14.36 m, bank 15.5 m, which used to read 92%).
+- Stations without a real bank height are skipped, because a made-up default would give false alarms.
+- The sources report one reading and no trend, so the website works out rising / falling from the last hour of saved history.
+- If you change the thresholds, change them in `statusFor` and `fillPct` together.
