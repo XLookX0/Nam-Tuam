@@ -19,7 +19,69 @@ export interface CamStatus extends CameraMeta {
 // camera in neighbouring Samut Sakhon. The position is approximate: move it to the exact spot if you know it.
 // `live: true` = current photo only. Remove it (and set up Cloudflare storage) to get the saved 3-day history, scrubber and compare view.
 export const CAMERAS: CameraMeta[] = [
-  { id: 'dwr-ta130202', name: 'แม่น้ำท่าจีนที่ท่าฉลอม (TA130202)', subtitle: 'เห็นสเกลวัดระดับน้ำที่ประตูน้ำ จ.สมุทรสาคร', lat: 13.5236, lng: 100.2713, credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
+  { 
+    id: 'dwr-ta130202', 
+    name: 'แม่น้ำท่าจีนที่ท่าฉลอม (TA130202)', 
+    subtitle: 'เห็นสเกลวัดระดับน้ำที่ประตูน้ำ จ.สมุทรสาคร', 
+    lat: 13.5236, 
+    lng: 100.2713, 
+    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
+    live: true 
+  },
+  { 
+    id: 'dwr-ta130203', 
+    name: 'แม่น้ำท่าจีนที่สะพานข้ามแม่น้ำท่าจีน 3 (TA130203)', //[cite: 1]
+    subtitle: 'จ.สมุทรสาคร อ.เมืองสมุทรสาคร ต.บ้านเกาะ', //[cite: 1]
+    lat: 0, 
+    lng: 0, 
+    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
+    live: true 
+  },
+  { 
+    id: 'dwr-ta180304', 
+    name: 'สะพานท่าแลงพัฒนา (TA180304)', //[cite: 2]
+    subtitle: 'จ.เพชรบุรี อ.ท่ายาง ต.ท่าคอย', //[cite: 2]
+    lat: 0, 
+    lng: 0, 
+    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
+    live: true 
+  },
+  { 
+    id: 'dwr-ta180305', 
+    name: 'สะพานวัดตำหรุ (TA180305)', //[cite: 2]
+    subtitle: 'จ.เพชรบุรี อ.บ้านลาด ต.ถ้ำรงค์', //[cite: 2]
+    lat: 0, 
+    lng: 0, 
+    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
+    live: true 
+  },
+  { 
+    id: 'dwr-ta180307', 
+    name: 'สะพานท่าสรง (TA180307)', //[cite: 2]
+    subtitle: 'จ.เพชรบุรี อ.เมืองเพชรบุรี ต.ท่าราบ', //[cite: 2]
+    lat: 0, 
+    lng: 0, 
+    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
+    live: true 
+  },
+  { 
+    id: 'dwr-ta180308', 
+    name: 'สะพานข้ามแม่น้ำเพชรบุรี ที่ อบต.บางครก (TA180308)', //[cite: 2]
+    subtitle: 'จ.เพชรบุรี อ.บ้านแหลม ต.บางครก', //[cite: 2]
+    lat: 0, 
+    lng: 0, 
+    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
+    live: true 
+  },
+  { 
+    id: 'dwr-tc180301', 
+    name: 'เทศบาลเมืองเพชรบุรี (TC180301)', //[cite: 2]
+    subtitle: 'จ.เพชรบุรี อ.เมืองเพชรบุรี ต.คลองกระแชง', //[cite: 2]
+    lat: 0, 
+    lng: 0, 
+    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
+    live: true 
+  }
 ];
 
 export const CAM_KEY = (id: string) => `cam:${id}:frames`;
