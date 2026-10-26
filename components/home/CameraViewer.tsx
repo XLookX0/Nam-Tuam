@@ -5,8 +5,8 @@ import { History, MapPin, Pause, Play, Share2, Star, X } from 'lucide-react';
 import { CamStatus, CAM_MAX_DAYS, ageLabel, camHealth, fmtFrameTime, frameUrl, liveUrl } from '@/lib/cameras';
 
 /** Photo viewer: scrub or play through up to 3 days of saved frames, compare an old frame with now, save, share, find on the map. */
-export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, onClose }: {
-  cam: CamStatus; saved: boolean; onSave: () => void; onShare: () => void; onViewMap: () => void; onClose: () => void;
+export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, onClose, canViewMap = true }: {
+  cam: CamStatus; saved: boolean; onSave: () => void; onShare: () => void; onViewMap: () => void; onClose: () => void; canViewMap?: boolean;
 }) {
   const isLive = !!cam.live;
   const [frames, setFrames] = useState<number[] | null>(isLive ? [] : null);
@@ -169,7 +169,7 @@ export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, o
             {isLive ? 'ภาพสด' : `ภาพล่าสุดถ่ายเมื่อ ${ageLabel(newest ?? null, nowMs)}`}
           </span>
           <button onClick={onShare} className="flex items-center gap-1.5 font-medium text-[#8fd3f4]"><Share2 className="size-4" /> แชร์</button>
-          <button onClick={onViewMap} className="flex items-center gap-1.5 font-medium text-[#8fd3f4]"><MapPin className="size-4" /> ดูบนแผนที่</button>
+          {canViewMap && (<button onClick={onViewMap} className="flex items-center gap-1.5 font-medium text-[#8fd3f4]"><MapPin className="size-4" /> ดูบนแผนที่</button>)}
         </div>
         <div className="mt-3 text-[11px] text-zinc-500">ภาพ: {cam.credit}</div>
       </div>

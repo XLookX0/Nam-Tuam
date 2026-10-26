@@ -43,7 +43,7 @@ const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 const CENTER: [number, number] = [13.4093, 100.0022];
 const BOUNDS: L.LatLngBoundsExpression = [
-  [13.2, 99.75],
+  [12.85, 99.7],
   [13.7, 100.45],
 ];
 

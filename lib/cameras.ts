@@ -3,8 +3,9 @@ export interface CameraMeta {
   id: string; // must match the id used in the Worker's CAMERAS variable
   name: string;
   subtitle?: string; // e.g. what the camera shows
-  lat: number;
-  lng: number;
+  province?: string; // used for the filter chips on the cameras section
+  lat?: number; // optional: without a position the camera still shows in the grid, just not as a pin on the map
+  lng?: number;
   stationId?: string | number; // nearest water station, shows its level on the card
   credit: string; // shown as "ภาพ: ..."
   live?: boolean; // true = shows the camera's current photo straight from /api/cam-source (no saved history, nothing to set up in Cloudflare)
@@ -15,74 +16,22 @@ export interface CamStatus extends CameraMeta {
   count: number; // frames kept (up to 3 days)
 }
 
-// ← EDIT THESE. No camera was found in Samut Songkhram, so this is a Department of Water Resources (DWR) Tha Chin River
-// camera in neighbouring Samut Sakhon. The position is approximate: move it to the exact spot if you know it.
-// `live: true` = current photo only. Remove it (and set up Cloudflare storage) to get the saved 3-day history, scrubber and compare view.
+// ← EDIT THESE. All of these are Department of Water Resources (DWR) cameras; none was found in Samut Songkhram itself.
+// Add `lat` and `lng` to a camera to show it as a pin on the map (in Google Maps: right-click the spot, click the numbers to copy them).
+// A camera without lat/lng still appears in the grid. `live: true` = current photo only (see docs/SETUP.md for saved history).
 export const CAMERAS: CameraMeta[] = [
-  { 
-    id: 'dwr-ta130202', 
-    name: 'แม่น้ำท่าจีนที่ท่าฉลอม (TA130202)', 
-    subtitle: 'เห็นสเกลวัดระดับน้ำที่ประตูน้ำ จ.สมุทรสาคร', 
-    lat: 13.5236, 
-    lng: 100.2713, 
-    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
-    live: true 
-  },
-  { 
-    id: 'dwr-ta130203', 
-    name: 'แม่น้ำท่าจีนที่สะพานข้ามแม่น้ำท่าจีน 3 (TA130203)', //[cite: 1]
-    subtitle: 'จ.สมุทรสาคร อ.เมืองสมุทรสาคร ต.บ้านเกาะ', //[cite: 1]
-    lat: 0, 
-    lng: 0, 
-    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
-    live: true 
-  },
-  { 
-    id: 'dwr-ta180304', 
-    name: 'สะพานท่าแลงพัฒนา (TA180304)', //[cite: 2]
-    subtitle: 'จ.เพชรบุรี อ.ท่ายาง ต.ท่าคอย', //[cite: 2]
-    lat: 0, 
-    lng: 0, 
-    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
-    live: true 
-  },
-  { 
-    id: 'dwr-ta180305', 
-    name: 'สะพานวัดตำหรุ (TA180305)', //[cite: 2]
-    subtitle: 'จ.เพชรบุรี อ.บ้านลาด ต.ถ้ำรงค์', //[cite: 2]
-    lat: 0, 
-    lng: 0, 
-    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
-    live: true 
-  },
-  { 
-    id: 'dwr-ta180307', 
-    name: 'สะพานท่าสรง (TA180307)', //[cite: 2]
-    subtitle: 'จ.เพชรบุรี อ.เมืองเพชรบุรี ต.ท่าราบ', //[cite: 2]
-    lat: 0, 
-    lng: 0, 
-    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
-    live: true 
-  },
-  { 
-    id: 'dwr-ta180308', 
-    name: 'สะพานข้ามแม่น้ำเพชรบุรี ที่ อบต.บางครก (TA180308)', //[cite: 2]
-    subtitle: 'จ.เพชรบุรี อ.บ้านแหลม ต.บางครก', //[cite: 2]
-    lat: 0, 
-    lng: 0, 
-    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
-    live: true 
-  },
-  { 
-    id: 'dwr-tc180301', 
-    name: 'เทศบาลเมืองเพชรบุรี (TC180301)', //[cite: 2]
-    subtitle: 'จ.เพชรบุรี อ.เมืองเพชรบุรี ต.คลองกระแชง', //[cite: 2]
-    lat: 0, 
-    lng: 0, 
-    credit: 'กรมทรัพยากรน้ำ (ทน.)', 
-    live: true 
-  }
+  { id: 'dwr-ta130202', province: 'สมุทรสาคร', name: 'แม่น้ำท่าจีนที่ท่าฉลอม (TA130202)', subtitle: 'เห็นสเกลวัดระดับน้ำที่ประตูน้ำ จ.สมุทรสาคร', lat: 13.5236, lng: 100.2713, credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
+  { id: 'dwr-ta130203', province: 'สมุทรสาคร', name: 'แม่น้ำท่าจีนที่สะพานข้ามแม่น้ำท่าจีน 3 (TA130203)', subtitle: 'จ.สมุทรสาคร อ.เมืองสมุทรสาคร ต.บ้านเกาะ', credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
+  { id: 'dwr-ta180304', province: 'เพชรบุรี', name: 'สะพานท่าแลงพัฒนา (TA180304)', subtitle: 'จ.เพชรบุรี อ.ท่ายาง ต.ท่าคอย', credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
+  { id: 'dwr-ta180305', province: 'เพชรบุรี', name: 'สะพานวัดตำหรุ (TA180305)', subtitle: 'จ.เพชรบุรี อ.บ้านลาด ต.ถ้ำรงค์', credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
+  { id: 'dwr-ta180307', province: 'เพชรบุรี', name: 'สะพานท่าสรง (TA180307)', subtitle: 'จ.เพชรบุรี อ.เมืองเพชรบุรี ต.ท่าราบ', credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
+  { id: 'dwr-ta180308', province: 'เพชรบุรี', name: 'สะพานข้ามแม่น้ำเพชรบุรี ที่ อบต.บางครก (TA180308)', subtitle: 'จ.เพชรบุรี อ.บ้านแหลม ต.บางครก', credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
+  { id: 'dwr-tc180301', province: 'เพชรบุรี', name: 'เทศบาลเมืองเพชรบุรี (TC180301)', subtitle: 'จ.เพชรบุรี อ.เมืองเพชรบุรี ต.คลองกระแชง', credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
 ];
+
+/** A camera can be pinned on the map only when it has a real position (0,0 counts as "not set"). */
+export const hasPos = (c: { lat?: number; lng?: number }) =>
+  Number.isFinite(c.lat) && Number.isFinite(c.lng) && !(c.lat === 0 && c.lng === 0);
 
 export const CAM_KEY = (id: string) => `cam:${id}:frames`;
 export const CAM_MAX_DAYS = 3;

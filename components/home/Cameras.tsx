@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Camera, LocateFixed, Search, Star } from 'lucide-react';
-import { CamStatus, ageLabel, camHealth, frameUrl, liveUrl } from '@/lib/cameras';
+import { CamStatus, ageLabel, camHealth, frameUrl, hasPos, liveUrl } from '@/lib/cameras';
 import { Station, haversineKm } from '@/lib/station';
 import { STATUS, card, kOf } from '@/lib/ui';
 
@@ -52,6 +52,7 @@ export default function CamerasSection({ cameras, stations, userPos, onLocate, s
 }) {
   const [q, setQ] = useState('');
   const [near, setNear] = useState(false);
+  const [prov, setProv] = useState('all');
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 30000); // keep the "N นาทีก่อน" badges fresh
@@ -61,8 +62,9 @@ export default function CamerasSection({ cameras, stations, userPos, onLocate, s
   const rows = useMemo(() => {
     const term = q.trim().toLowerCase();
     return cameras
+      .filter((c) => prov === 'all' || c.province === prov)
       .filter((c) => !term || `${c.name} ${c.subtitle ?? ''}`.toLowerCase().includes(term))
-      .map((c) => ({ c, km: near && userPos ? haversineKm(userPos, [c.lat, c.lng]) : undefined }))
+      .map((c) => ({ c, km: near && userPos && hasPos(c) ? haversineKm(userPos, [c.lat as number, c.lng as number]) : undefined }))
       .sort((a, b) => {
         const sa = saved.includes(a.c.id) ? 0 : 1;
         const sb = saved.includes(b.c.id) ? 0 : 1;
@@ -70,7 +72,9 @@ export default function CamerasSection({ cameras, stations, userPos, onLocate, s
         if (a.km != null && b.km != null) return a.km - b.km;
         return a.c.name.localeCompare(b.c.name, 'th');
       });
-  }, [cameras, q, near, userPos, saved]);
+  }, [cameras, q, near, userPos, saved, prov]);
+
+  const provinces = useMemo(() => Array.from(new Set(cameras.map((c) => c.province).filter((p): p is string => !!p))), [cameras]);
 
   const liveCount = cameras.filter((c) => camHealth(c.latestTs, nowMs) !== 'off').length;
 
@@ -91,6 +95,16 @@ export default function CamerasSection({ cameras, stations, userPos, onLocate, s
           <LocateFixed className="size-4" /> กล้องใกล้ฉัน
         </button>
       </div>
+      {provinces.length > 1 && (
+        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+          {['all', ...provinces].map((p) => (
+            <button key={p} onClick={() => setProv(p)} aria-pressed={prov === p}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm transition ${prov === p ? 'bg-[#8fd3f4] font-semibold text-[#06242a]' : 'bg-white/[0.06] text-zinc-200 hover:bg-white/10'}`}>
+              {p === 'all' ? 'ทุกจังหวัด' : p} <span className="tabular-nums opacity-70">{p === 'all' ? cameras.length : cameras.filter((c) => c.province === p).length}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map(({ c, km }) => (
           <CameraCard key={c.id} cam={c} station={stations.find((s) => String(s.id) === String(c.stationId))} saved={saved.includes(c.id)} nowMs={nowMs} distanceKm={km} onOpen={onOpen} />

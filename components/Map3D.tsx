@@ -30,7 +30,7 @@ function loadMapLibre(): Promise<MapLibre> {
 }
 
 const CENTER: [number, number] = [100.0022, 13.4093]; // lng, lat
-const BOUNDS: [[number, number], [number, number]] = [[99.6, 13.0], [100.4, 13.8]];
+const BOUNDS: [[number, number], [number, number]] = [[99.6, 12.8], [100.45, 13.8]];
 const SRC = 'flood-stations';
 const STYLES = ['dark', 'liberty']; // OpenFreeMap style names, tried in order
 

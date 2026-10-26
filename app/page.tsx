@@ -12,7 +12,7 @@ import CameraViewer from '@/components/home/CameraViewer';
 import { TrendLabel } from '@/components/home/StationCard';
 import { AreaId, Filter, HistoryChart, MyArea, Overview, SectionHead, Sort, StationsSection } from '@/components/home/Sections';
 import { Snapshot, applySnapshot, recentTrend, sixHourChange } from '@/lib/history';
-import { CAMERAS, CamStatus } from '@/lib/cameras';
+import { CAMERAS, CamStatus, hasPos } from '@/lib/cameras';
 import { Station, ColorBy, CameraMode, MapLayers, isStale, haversineKm, fmtTime, normalizeStation } from '@/lib/station';
 import { STATUS, card, glass, kOf } from '@/lib/ui';
 
@@ -390,12 +390,18 @@ export default function Dashboard() {
     }
   };
   const camOnMap = (cam: CamStatus) => {
+    if (!hasPos(cam)) return;
     setViewerId(null);
     setShowCameras(true);
-    setCamFocus((f) => ({ lat: cam.lat, lng: cam.lng, key: (f?.key ?? 0) + 1 }));
+    setCamFocus((f) => ({ lat: cam.lat as number, lng: cam.lng as number, key: (f?.key ?? 0) + 1 }));
     if (!fullscreen) scrollTo('map-stage');
   };
   const viewerCam = cameras.find((c) => c.id === viewerId) ?? null;
+  // only cameras with a real position become pins on the map
+  const camPins = useMemo(
+    () => cameras.filter(hasPos).map((c) => ({ id: c.id, name: c.name, lat: c.lat as number, lng: c.lng as number })),
+    [cameras]
+  );
 
   const open3D = () => {
     setViewMode('3d');
@@ -570,7 +576,7 @@ export default function Dashboard() {
                 say('เปิดแผนที่ 3 มิติไม่ได้ในอุปกรณ์นี้ จึงกลับไปแบบ 2 มิติ');
               }}
               onLocate={() => locate('map')} onShare={() => share()} onRefresh={fetchData} loading={loading}
-              cameras={cameras} showCameras={showCameras} onShowCameras={setShowCameras} onCameraOpen={setViewerId} focus={camFocus}
+              cameras={camPins} showCameras={showCameras} onShowCameras={setShowCameras} onCameraOpen={setViewerId} focus={camFocus}
             >
               {selectedCard}
             </MapStage>
@@ -603,7 +609,7 @@ export default function Dashboard() {
 
       {viewerCam && (
         <CameraViewer key={viewerCam.id} cam={viewerCam} saved={savedCams.includes(viewerCam.id)} onSave={() => toggleSaved(viewerCam.id)}
-          onShare={() => shareCam(viewerCam)} onViewMap={() => camOnMap(viewerCam)} onClose={() => setViewerId(null)} />
+          onShare={() => shareCam(viewerCam)} onViewMap={() => camOnMap(viewerCam)} canViewMap={hasPos(viewerCam)} onClose={() => setViewerId(null)} />
       )}
 
       <ReplayBar history={history} replay={replay} playing={playing} snapT={replaySnap?.t ?? null} onLive={onLive} onScrub={onScrub} onPlay={onPlay} />
