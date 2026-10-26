@@ -76,3 +76,46 @@ Camera URLs are secrets: they live only in the Worker variable, never in the web
 - Stations without a real bank height are skipped, because a made-up default would give false alarms.
 - The sources report one reading and no trend, so the website works out rising / falling from the last hour of saved history.
 - If you change the thresholds, change them in `statusFor` and `fillPct` together.
+
+
+## Cameras on a home network (Yoosee and similar): push mode
+A home camera has no public address, so the Worker can't download from it. Instead a small script on a computer on the same
+network grabs one frame from the camera and uploads it to the Worker.
+1. In the Yoosee app set a camera password. The camera's RTSP address is normally `rtsp://admin:<password>@<camera-ip>:554/onvif1`
+   (`/onvif2` is the lighter preview stream; a few models use `/11`). Test it first in VLC: Media -> Open Network Stream.
+   Give the camera a fixed IP (router: DHCP reservation), because the address can change.
+2. Worker secrets: add `UPLOAD_KEY` (any long random string you invent) and put the camera in `CAMERAS` as `{"id":"cam-01","push":true}` (no url).
+3. On the always-on computer: install ffmpeg, copy `tools/push-camera.ps1` (Windows) or `tools/push-camera.sh` (Linux, Mac, Raspberry Pi),
+   fill in the four values at the top, and run it every 3 minutes (the first lines of each script show how).
+4. Test: run the script once by hand. It should print `{"ok":true,...}`. Then check `/api/cameras`.
+Never forward the camera's port to the internet. The script only needs an outgoing connection.
+To try the website with no camera at all, set a pull camera such as `{"id":"cam-01","url":"https://picsum.photos/1280/720.jpg"}` (a random photo each time).
+
+
+## Cameras without R2 (free), and the DWR cameras
+**Storage.** R2 asks for a payment method. Workers KV does not need one (it is part of the free Workers plan, as far as I know).
+Bind a KV namespace to the Worker as `CAM_KV` (Workers & Pages -> KV -> create namespace; then Worker -> Settings -> Bindings -> KV namespace).
+The Worker uses R2 only if `CAM_BUCKET` is also bound. Free KV allows 1,000 writes a day, 100,000 reads a day and 1 GB,
+so with KV the Worker takes a photo every 6 minutes (240 a day per camera, fine for up to 4 cameras). Change it with `CAM_EVERY_MIN` (a multiple of 3).
+Frames delete themselves after 3 days (KV expiry).
+
+**DWR Axis cameras (http, port 5001, user name and password).** Cloudflare Workers can't put a password inside a URL and may ignore custom ports,
+so the website itself (Vercel) fetches the photo: `app/api/cam-source/[id]/route.ts`.
+Vercel environment variables:
+- `CAM_PROXY_KEY` = a long random string you invent
+- `CAM_SOURCES` = `{"dwr-ta130202":{"base":"http://ta130202.dyndns.info:5001","user":"live","pass":"<password from the DWR page>"},"dwr-ta130203":{"base":"http://<host>:<port>","user":"live","pass":"<password>"}}`
+Worker secret `CAMERAS`:
+`[{"id":"dwr-ta130202","url":"https://<your-site>.vercel.app/api/cam-source/dwr-ta130202","headers":{"x-cam-key":"<same as CAM_PROXY_KEY>"}}, ...]`
+The route asks the camera for a single photo (`/axis-cgi/jpg/image.cgi`) and, if that is not available, cuts the first frame out of the MJPEG stream (`/axis-cgi/mjpg/video.cgi`).
+Please check DWR's terms (or ask mekhala@dwr.mail.go.th) before showing and archiving their pictures publicly, and keep the credit on the cards.
+
+
+## Simplest camera setup: live photo only (no Cloudflare, no storage, no keys)
+For a camera that is reachable over the internet with a user name and password (like the DWR Axis cameras), mark it `live: true`
+in `lib/cameras.ts`. The website then shows the camera's current photo (refreshed every 30-60 s) through `/api/cam-source/<id>`,
+which logs in to the camera (Basic or Digest) and returns the picture over HTTPS. Nothing to set up in Cloudflare or Vercel:
+the first DWR camera (`dwr-ta130202`) is built into the route. More cameras: Vercel variable `CAM_SOURCES`
+(`{"dwr-ta130203":{"base":"http://host:port","user":"live","pass":"..."}}`).
+What you give up: the saved 3-day history, scrubber, timelapse and compare view. To get those later, remove `live: true`
+and follow "Cameras without R2" above (the Worker then downloads the same route every 6 minutes and stores the photos in KV).
+Test: open `https://<your-site>/api/cam-source/dwr-ta130202` in a browser. You should see the Tha Chalom gauge photo.

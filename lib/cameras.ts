@@ -7,6 +7,7 @@ export interface CameraMeta {
   lng: number;
   stationId?: string | number; // nearest water station, shows its level on the card
   credit: string; // shown as "ภาพ: ..."
+  live?: boolean; // true = shows the camera's current photo straight from /api/cam-source (no saved history, nothing to set up in Cloudflare)
 }
 
 export interface CamStatus extends CameraMeta {
@@ -14,11 +15,11 @@ export interface CamStatus extends CameraMeta {
   count: number; // frames kept (up to 3 days)
 }
 
-// ← EDIT THESE: your real cameras (names, positions, credit). Keep ids in sync with the Worker.
+// ← EDIT THESE. No camera was found in Samut Songkhram, so this is a Department of Water Resources (DWR) Tha Chin River
+// camera in neighbouring Samut Sakhon. The position is approximate: move it to the exact spot if you know it.
+// `live: true` = current photo only. Remove it (and set up Cloudflare storage) to get the saved 3-day history, scrubber and compare view.
 export const CAMERAS: CameraMeta[] = [
-  { id: 'cam-01', name: 'ปากอ่าวแม่กลอง', subtitle: 'มองเห็นระดับน้ำริมแม่น้ำแม่กลอง', lat: 13.414006, lng: 100.000623, stationId: 'TELE_SKM_03', credit: 'กล้องของโครงการ' },
-  { id: 'cam-02', name: 'หน้าวัดอัมพวันเจติยาราม', subtitle: 'ริมแม่น้ำแม่กลอง อัมพวา', lat: 13.424368, lng: 99.954497, stationId: 'TELE_SKM_02', credit: 'กล้องของโครงการ' },
-  { id: 'cam-03', name: 'ประตูระบายน้ำคลองอัมพวา', subtitle: 'ดูการระบายน้ำเข้าออกคลอง', lat: 13.4305, lng: 99.9628, stationId: 'TELE_SKM_05', credit: 'กล้องของโครงการ' },
+  { id: 'dwr-ta130202', name: 'แม่น้ำท่าจีนที่ท่าฉลอม (TA130202)', subtitle: 'เห็นสเกลวัดระดับน้ำที่ประตูน้ำ จ.สมุทรสาคร', lat: 13.5236, lng: 100.2713, credit: 'กรมทรัพยากรน้ำ (ทน.)', live: true },
 ];
 
 export const CAM_KEY = (id: string) => `cam:${id}:frames`;
@@ -26,6 +27,8 @@ export const CAM_MAX_DAYS = 3;
 
 /** Where saved frames are served from: your Worker, e.g. https://nam-tuam.<you>.workers.dev (set NEXT_PUBLIC_CAM_BASE). */
 export const CAM_BASE = (process.env.NEXT_PUBLIC_CAM_BASE ?? '').replace(/\/$/, '');
+/** Live cameras: the bucket changes every 30 s so browsers fetch a fresh photo. */
+export const liveUrl = (id: string, bucket: number) => `/api/cam-source/${id}?v=${bucket}`;
 export const frameUrl = (id: string, ts: number) => `${CAM_BASE}/cam/${id}/${ts}.jpg`;
 
 export function ageLabel(ts: number | null, nowMs: number): string {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Camera, LocateFixed, Search, Star } from 'lucide-react';
-import { CamStatus, ageLabel, camHealth, frameUrl } from '@/lib/cameras';
+import { CamStatus, ageLabel, camHealth, frameUrl, liveUrl } from '@/lib/cameras';
 import { Station, haversineKm } from '@/lib/station';
 import { STATUS, card, kOf } from '@/lib/ui';
 
@@ -14,19 +14,20 @@ export function CameraCard({ cam, station, saved, nowMs, distanceKm, onOpen }: {
 }) {
   const [broken, setBroken] = useState(false);
   const health = camHealth(cam.latestTs, nowMs);
+  const src = cam.live ? liveUrl(cam.id, Math.floor(nowMs / 60000)) : cam.latestTs ? frameUrl(cam.id, cam.latestTs) : null;
   return (
     <button onClick={() => onOpen(cam.id)} className={`${card} group overflow-hidden text-left transition hover:bg-white/[0.07]`}>
       <div className="relative aspect-video bg-[#0a1c25]">
-        {cam.latestTs && !broken ? (
+        {src && !broken ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={frameUrl(cam.id, cam.latestTs)} alt={`ภาพล่าสุดจากกล้อง ${cam.name}`} loading="lazy" onError={() => setBroken(true)}
+          <img src={src} alt={`ภาพล่าสุดจากกล้อง ${cam.name}`} loading="lazy" onError={() => setBroken(true)}
             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
         ) : (
           <div className="grid h-full place-items-center text-zinc-500"><Camera className="size-8" /></div>
         )}
         <span className="glass absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold">
           <span className={`size-1.5 rounded-full ${HEALTH_DOT[health]}`} />
-          {ageLabel(cam.latestTs, nowMs)}
+          {cam.live ? 'ภาพสด' : ageLabel(cam.latestTs, nowMs)}
         </span>
         {saved && <Star className="absolute right-2.5 top-2.5 size-5 fill-amber-300 text-amber-300 drop-shadow" />}
       </div>
@@ -78,7 +79,7 @@ export default function CamerasSection({ cameras, stations, userPos, onLocate, s
   }
   return (
     <div>
-      <p className="text-zinc-300">ภาพนิ่งจากกล้อง {cameras.length} ตัว ({liveCount} ตัวส่งภาพอยู่) ดูสภาพจริงริมน้ำก่อนออกจากบ้าน แตะที่ภาพเพื่อดูย้อนหลังได้ถึง 3 วัน</p>
+      <p className="text-zinc-300">ภาพนิ่งจากกล้อง {cameras.length} ตัว ({liveCount} ตัวส่งภาพอยู่) ดูสภาพจริงริมน้ำก่อนออกจากบ้าน {cameras.some((c) => !c.live) ? 'แตะที่ภาพเพื่อดูย้อนหลังได้ถึง 3 วัน' : 'แตะที่ภาพเพื่อดูภาพขยาย'}</p>
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />

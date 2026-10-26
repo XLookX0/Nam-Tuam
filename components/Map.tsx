@@ -44,7 +44,7 @@ const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const CENTER: [number, number] = [13.4093, 100.0022];
 const BOUNDS: L.LatLngBoundsExpression = [
   [13.2, 99.75],
-  [13.65, 100.25],
+  [13.7, 100.45],
 ];
 
 const camIcon = L.divIcon({ className: '', html: `<div class="cam-pin">${CAM_PIN_SVG}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });

@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { History, MapPin, Pause, Play, Share2, Star, X } from 'lucide-react';
-import { CamStatus, CAM_MAX_DAYS, ageLabel, camHealth, fmtFrameTime, frameUrl } from '@/lib/cameras';
+import { CamStatus, CAM_MAX_DAYS, ageLabel, camHealth, fmtFrameTime, frameUrl, liveUrl } from '@/lib/cameras';
 
 /** Photo viewer: scrub or play through up to 3 days of saved frames, compare an old frame with now, save, share, find on the map. */
 export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, onClose }: {
   cam: CamStatus; saved: boolean; onSave: () => void; onShare: () => void; onViewMap: () => void; onClose: () => void;
 }) {
-  const [frames, setFrames] = useState<number[] | null>(null);
+  const isLive = !!cam.live;
+  const [frames, setFrames] = useState<number[] | null>(isLive ? [] : null);
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [compare, setCompare] = useState(false);
@@ -18,6 +19,7 @@ export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, o
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
+    if (isLive) return; // live cameras have no saved frames
     let alive = true;
     fetch(`/api/cameras/${cam.id}/frames`)
       .then((r) => r.json())
@@ -31,13 +33,13 @@ export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, o
     return () => {
       alive = false;
     };
-  }, [cam.id]);
+  }, [cam.id, isLive]);
 
   useEffect(() => {
     closeRef.current?.focus();
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const t = setInterval(() => setNowMs(Date.now()), 30000);
+    const t = setInterval(() => setNowMs(Date.now()), 30000); // live cameras reload their photo on this tick
     return () => {
       document.body.style.overflow = prev;
       clearInterval(t);
@@ -103,7 +105,10 @@ export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, o
 
         {/* picture */}
         <div className="relative aspect-video overflow-hidden rounded-2xl bg-black">
-          {frames === null ? (
+          {isLive ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={liveUrl(cam.id, Math.floor(nowMs / 30000))} alt={`ภาพสดจากกล้อง ${cam.name}`} className="absolute inset-0 h-full w-full select-none object-contain" />
+          ) : frames === null ? (
             <div className="grid h-full place-items-center text-sm text-zinc-400">กำลังโหลดภาพ...</div>
           ) : !ts ? (
             <div className="grid h-full place-items-center px-6 text-center text-sm text-zinc-400">ยังไม่มีภาพจากกล้องนี้ กล้องจะเริ่มบันทึกภาพทุก 3 นาที</div>
@@ -122,9 +127,12 @@ export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, o
           ) : (
             img(ts)
           )}
+          {isLive && <span className="glass absolute left-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"><span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />ภาพสด</span>}
           {ts && !compare && <span className="glass absolute left-2.5 top-2.5 rounded-full px-3 py-1 text-xs font-semibold">{fmtFrameTime(ts)} น.</span>}
           <span className="glass pointer-events-none absolute bottom-2.5 right-2.5 rounded-full px-3 py-1 text-[11px] font-semibold text-zinc-200">น้ำสมุทรสงคราม</span>
         </div>
+
+        {isLive && <p className="mt-3 text-xs text-zinc-300">ภาพสดจากกล้องของ {cam.credit} ภาพรีเฟรชทุก 30 วินาที ยังไม่มีภาพย้อนหลังสำหรับกล้องนี้</p>}
 
         {/* scrubber */}
         {n > 1 && (
@@ -158,7 +166,7 @@ export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, o
           </button>
           <span className="inline-flex items-center gap-1.5 text-xs text-zinc-300">
             <span className={`size-1.5 rounded-full ${health === 'ok' ? 'bg-emerald-400' : health === 'late' ? 'bg-amber-400' : 'bg-zinc-500'}`} />
-            ภาพล่าสุดถ่ายเมื่อ {ageLabel(newest ?? null, nowMs)}
+            {isLive ? 'ภาพสด' : `ภาพล่าสุดถ่ายเมื่อ ${ageLabel(newest ?? null, nowMs)}`}
           </span>
           <button onClick={onShare} className="flex items-center gap-1.5 font-medium text-[#8fd3f4]"><Share2 className="size-4" /> แชร์</button>
           <button onClick={onViewMap} className="flex items-center gap-1.5 font-medium text-[#8fd3f4]"><MapPin className="size-4" /> ดูบนแผนที่</button>
