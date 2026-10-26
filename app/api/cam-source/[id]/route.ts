@@ -21,6 +21,12 @@ interface Source {
 
 const DEFAULT_SOURCES: Record<string, Source> = {
   'dwr-ta130202': { base: 'http://ta130202.dyndns.info:5001', user: 'live', pass: 'Live2025!' },
+  'dwr-ta130203': { base: 'http://ta130203.dyndns.info:5001', user: 'live', pass: 'Live2025!' },
+  'dwr-ta180304': { base: 'http://ta180304.dyndns.info:5001', user: 'live', pass: 'Live2025!' },
+  'dwr-ta180305': { base: 'http://ta180305.dyndns.info:5001', user: 'live', pass: 'Live2025!' },
+  'dwr-ta180307': { base: 'http://ta180307.dyndns.info:5001', user: 'live', pass: 'Live2025!' },
+  'dwr-ta180308': { base: 'http://ta180308.dyndns.info:5001', user: 'live', pass: 'Live2025!' },
+  'dwr-tc180301': { base: 'http://tc180301.dyndns.info:5001', user: 'live', pass: 'Live2025!' },
 };
 
 function sources(): Record<string, Source> {
