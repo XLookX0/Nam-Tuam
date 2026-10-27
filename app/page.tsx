@@ -399,7 +399,7 @@ export default function Dashboard() {
   const viewerCam = cameras.find((c) => c.id === viewerId) ?? null;
   // only cameras with a real position become pins on the map
   const camPins = useMemo(
-    () => cameras.filter(hasPos).map((c) => ({ id: c.id, name: c.name, lat: c.lat as number, lng: c.lng as number })),
+    () => cameras.filter(hasPos).map((c) => ({ id: c.id, name: c.approxPos ? `${c.name} (ตำแหน่งโดยประมาณ)` : c.name, lat: c.lat as number, lng: c.lng as number })),
     [cameras]
   );
 

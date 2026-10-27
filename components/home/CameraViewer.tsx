@@ -171,7 +171,7 @@ export default function CameraViewer({ cam, saved, onSave, onShare, onViewMap, o
           <button onClick={onShare} className="flex items-center gap-1.5 font-medium text-[#8fd3f4]"><Share2 className="size-4" /> แชร์</button>
           {canViewMap && (<button onClick={onViewMap} className="flex items-center gap-1.5 font-medium text-[#8fd3f4]"><MapPin className="size-4" /> ดูบนแผนที่</button>)}
         </div>
-        <div className="mt-3 text-[11px] text-zinc-500">ภาพ: {cam.credit}</div>
+        <div className="mt-3 text-[11px] text-zinc-500">ภาพ: {cam.credit}{cam.approxPos ? ' · ตำแหน่งบนแผนที่เป็นค่าโดยประมาณ' : ''}</div>
       </div>
     </div>
   );
